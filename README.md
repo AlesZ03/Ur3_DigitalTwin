@@ -30,9 +30,11 @@ A környezet infrastruktúráját **Terraform** kezeli és építi fel.
 2. **Terraform inicializálás**
     ```bash
     terraform init
+
 3. **Konfiguráció ellenőrzése**
    ```bash
    terraform plan
+
 4. **Infrastruktúra létrehozása**
   ```bash
    terraform apply

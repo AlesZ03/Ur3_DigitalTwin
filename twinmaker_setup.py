@@ -99,7 +99,6 @@ class TwinMakerSetup:
                             "arn": self.lambda_arn
                         }
                     },
-                    "isInherited": False,
                     "scope": "ENTITY"
                 }
             },
@@ -246,7 +245,7 @@ class TwinMakerSetup:
             self.client.create_scene(
                 workspaceId=self.workspace_id,
                 sceneId=self.scene_id,
-                contentLocation=f"arn:aws:s3:::{self.s3_bucket}/{scene_key}",
+                contentLocation=f"s3://{self.s3_bucket}/{scene_key}",
                 description="UR3 Robot 3D Scene"
             )
             print(f"Created scene {self.scene_id}")

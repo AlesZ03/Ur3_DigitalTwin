@@ -401,7 +401,7 @@ resource "aws_iot_topic_rule" "ur3_command_rule" {
 }
 
 # Várakozás az IAM szerepkör propagálásához
-resource "time_sleep" "wait_for_iam" {s
+resource "time_sleep" "wait_for_iam" {
   depends_on = [
     aws_iam_role_policy.twinmaker_s3_policy,
     aws_iam_role_policy.twinmaker_additional_policy,

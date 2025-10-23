@@ -1,0 +1,809 @@
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  - destroy
+
+Terraform will perform the following actions:
+
+  # aws_iam_role.lambda_execution_role will be destroyed
+  - resource "aws_iam_role" "lambda_execution_role" {
+      - arn                   = "arn:aws:iam::442729101031:role/UR3LambdaExecutionRole-rlhbay4p" -> null
+      - assume_role_policy    = jsonencode(
+            {
+              - Statement = [
+                  - {
+                      - Action    = "sts:AssumeRole"
+                      - Effect    = "Allow"
+                      - Principal = {
+                          - Service = "lambda.amazonaws.com"
+                        }
+                    },
+                ]
+              - Version   = "2012-10-17"
+            }
+        ) -> null
+      - create_date           = "2025-10-22T16:06:08Z" -> null
+      - force_detach_policies = false -> null
+      - id                    = "UR3LambdaExecutionRole-rlhbay4p" -> null
+      - managed_policy_arns   = [
+          - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+        ] -> null
+      - max_session_duration  = 3600 -> null
+      - name                  = "UR3LambdaExecutionRole-rlhbay4p" -> null
+      - path                  = "/" -> null
+      - tags                  = {} -> null
+      - tags_all              = {} -> null
+      - unique_id             = "AROAWOFFV63TYJTA4BBE5" -> null
+        # (3 unchanged attributes hidden)
+
+      - inline_policy {
+          - name   = "LambdaTwinMakerPolicy" -> null
+          - policy = jsonencode(
+                {
+                  - Statement = [
+                      - {
+                          - Action   = [
+                              - "iottwinmaker:*",
+                            ]
+                          - Effect   = "Allow"
+                          - Resource = "*"
+                        },
+                      - {
+                          - Action   = [
+                              - "iot:Publish",
+                              - "iot:Subscribe",
+                              - "iot:Connect",
+                              - "iot:Receive",
+                            ]
+                          - Effect   = "Allow"
+                          - Resource = "*"
+                        },
+                    ]
+                  - Version   = "2012-10-17"
+                }
+            ) -> null
+        }
+    }
+
+  # aws_iam_role.twinmaker_execution_role will be destroyed
+  - resource "aws_iam_role" "twinmaker_execution_role" {
+      - arn                   = "arn:aws:iam::442729101031:role/TwinMakerExecutionRole-rlhbay4p" -> null
+      - assume_role_policy    = jsonencode(
+            {
+              - Statement = [
+                  - {
+                      - Action    = "sts:AssumeRole"
+                      - Effect    = "Allow"
+                      - Principal = {
+                          - Service = "iottwinmaker.amazonaws.com"
+                        }
+                    },
+                ]
+              - Version   = "2012-10-17"
+            }
+        ) -> null
+      - create_date           = "2025-10-22T16:06:08Z" -> null
+      - force_detach_policies = false -> null
+      - id                    = "TwinMakerExecutionRole-rlhbay4p" -> null
+      - managed_policy_arns   = [] -> null
+      - max_session_duration  = 3600 -> null
+      - name                  = "TwinMakerExecutionRole-rlhbay4p" -> null
+      - path                  = "/" -> null
+      - tags                  = {} -> null
+      - tags_all              = {} -> null
+      - unique_id             = "AROAWOFFV63T3SEPB2RDO" -> null
+        # (3 unchanged attributes hidden)
+
+      - inline_policy {
+          - name   = "TwinMakerAdditionalPolicy" -> null
+          - policy = jsonencode(
+                {
+                  - Statement = [
+                      - {
+                          - Action   = [
+                              - "iottwinmaker:*",
+                              - "iot:DescribeThing",
+                              - "iot:ListThings",
+                              - "iotsitewise:*",
+                              - "kinesisvideo:*",
+                              - "timestream:*",
+                              - "logs:CreateLogGroup",
+                              - "logs:CreateLogStream",
+                              - "logs:PutLogEvents",
+                              - "logs:DescribeLogGroups",
+                              - "logs:DescribeLogStreams",
+                            ]
+                          - Effect   = "Allow"
+                          - Resource = "*"
+                        },
+                      - {
+                          - Action   = [
+                              - "iam:PassRole",
+                            ]
+                          - Effect   = "Allow"
+                          - Resource = "arn:aws:iam::442729101031:role/TwinMakerExecutionRole-rlhbay4p"
+                        },
+                    ]
+                  - Version   = "2012-10-17"
+                }
+            ) -> null
+        }
+      - inline_policy {
+          - name   = "TwinMakerLambdaPolicy" -> null
+          - policy = jsonencode(
+                {
+                  - Statement = [
+                      - {
+                          - Action   = [
+                              - "lambda:InvokeFunction",
+                              - "lambda:GetFunction",
+                              - "lambda:ListFunctions",
+                            ]
+                          - Effect   = "Allow"
+                          - Resource = [
+                              - "arn:aws:lambda:us-east-1:442729101031:function:ur3-data-processor-rlhbay4p",
+                              - "arn:aws:lambda:us-east-1:442729101031:function:ur3-data-processor-rlhbay4p:*",
+                            ]
+                        },
+                      - {
+                          - Action   = [
+                              - "iot:Publish",
+                              - "iot:Subscribe",
+                              - "iot:Connect",
+                              - "iot:Receive",
+                            ]
+                          - Effect   = "Allow"
+                          - Resource = "*"
+                        },
+                    ]
+                  - Version   = "2012-10-17"
+                }
+            ) -> null
+        }
+      - inline_policy {
+          - name   = "TwinMakerS3Policy" -> null
+          - policy = jsonencode(
+                {
+                  - Statement = [
+                      - {
+                          - Action   = [
+                              - "s3:GetObject",
+                              - "s3:PutObject",
+                              - "s3:DeleteObject",
+                              - "s3:ListBucket",
+                              - "s3:GetBucketLocation",
+                              - "s3:GetBucketVersioning",
+                              - "s3:GetBucketPolicy",
+                            ]
+                          - Effect   = "Allow"
+                          - Resource = [
+                              - "arn:aws:s3:::ur3-twin-scene-rlhbay4p",
+                              - "arn:aws:s3:::ur3-twin-scene-rlhbay4p/*",
+                            ]
+                        },
+                    ]
+                  - Version   = "2012-10-17"
+                }
+            ) -> null
+        }
+    }
+
+  # aws_iam_role_policy.lambda_twinmaker_policy will be destroyed
+  - resource "aws_iam_role_policy" "lambda_twinmaker_policy" {
+      - id          = "UR3LambdaExecutionRole-rlhbay4p:LambdaTwinMakerPolicy" -> null
+      - name        = "LambdaTwinMakerPolicy" -> null
+      - policy      = jsonencode(
+            {
+              - Statement = [
+                  - {
+                      - Action   = [
+                          - "iottwinmaker:*",
+                        ]
+                      - Effect   = "Allow"
+                      - Resource = "*"
+                    },
+                  - {
+                      - Action   = [
+                          - "iot:Publish",
+                          - "iot:Subscribe",
+                          - "iot:Connect",
+                          - "iot:Receive",
+                        ]
+                      - Effect   = "Allow"
+                      - Resource = "*"
+                    },
+                ]
+              - Version   = "2012-10-17"
+            }
+        ) -> null
+      - role        = "UR3LambdaExecutionRole-rlhbay4p" -> null
+        # (1 unchanged attribute hidden)
+    }
+
+  # aws_iam_role_policy.twinmaker_additional_policy will be destroyed
+  - resource "aws_iam_role_policy" "twinmaker_additional_policy" {
+      - id          = "TwinMakerExecutionRole-rlhbay4p:TwinMakerAdditionalPolicy" -> null
+      - name        = "TwinMakerAdditionalPolicy" -> null
+      - policy      = jsonencode(
+            {
+              - Statement = [
+                  - {
+                      - Action   = [
+                          - "iottwinmaker:*",
+                          - "iot:DescribeThing",
+                          - "iot:ListThings",
+                          - "iotsitewise:*",
+                          - "kinesisvideo:*",
+                          - "timestream:*",
+                          - "logs:CreateLogGroup",
+                          - "logs:CreateLogStream",
+                          - "logs:PutLogEvents",
+                          - "logs:DescribeLogGroups",
+                          - "logs:DescribeLogStreams",
+                        ]
+                      - Effect   = "Allow"
+                      - Resource = "*"
+                    },
+                  - {
+                      - Action   = [
+                          - "iam:PassRole",
+                        ]
+                      - Effect   = "Allow"
+                      - Resource = "arn:aws:iam::442729101031:role/TwinMakerExecutionRole-rlhbay4p"
+                    },
+                ]
+              - Version   = "2012-10-17"
+            }
+        ) -> null
+      - role        = "TwinMakerExecutionRole-rlhbay4p" -> null
+        # (1 unchanged attribute hidden)
+    }
+
+  # aws_iam_role_policy.twinmaker_lambda_policy will be destroyed
+  - resource "aws_iam_role_policy" "twinmaker_lambda_policy" {
+      - id          = "TwinMakerExecutionRole-rlhbay4p:TwinMakerLambdaPolicy" -> null
+      - name        = "TwinMakerLambdaPolicy" -> null
+      - policy      = jsonencode(
+            {
+              - Statement = [
+                  - {
+                      - Action   = [
+                          - "lambda:InvokeFunction",
+                          - "lambda:GetFunction",
+                          - "lambda:ListFunctions",
+                        ]
+                      - Effect   = "Allow"
+                      - Resource = [
+                          - "arn:aws:lambda:us-east-1:442729101031:function:ur3-data-processor-rlhbay4p",
+                          - "arn:aws:lambda:us-east-1:442729101031:function:ur3-data-processor-rlhbay4p:*",
+                        ]
+                    },
+                  - {
+                      - Action   = [
+                          - "iot:Publish",
+                          - "iot:Subscribe",
+                          - "iot:Connect",
+                          - "iot:Receive",
+                        ]
+                      - Effect   = "Allow"
+                      - Resource = "*"
+                    },
+                ]
+              - Version   = "2012-10-17"
+            }
+        ) -> null
+      - role        = "TwinMakerExecutionRole-rlhbay4p" -> null
+        # (1 unchanged attribute hidden)
+    }
+
+  # aws_iam_role_policy.twinmaker_s3_policy will be destroyed
+  - resource "aws_iam_role_policy" "twinmaker_s3_policy" {
+      - id          = "TwinMakerExecutionRole-rlhbay4p:TwinMakerS3Policy" -> null
+      - name        = "TwinMakerS3Policy" -> null
+      - policy      = jsonencode(
+            {
+              - Statement = [
+                  - {
+                      - Action   = [
+                          - "s3:GetObject",
+                          - "s3:PutObject",
+                          - "s3:DeleteObject",
+                          - "s3:ListBucket",
+                          - "s3:GetBucketLocation",
+                          - "s3:GetBucketVersioning",
+                          - "s3:GetBucketPolicy",
+                        ]
+                      - Effect   = "Allow"
+                      - Resource = [
+                          - "arn:aws:s3:::ur3-twin-scene-rlhbay4p",
+                          - "arn:aws:s3:::ur3-twin-scene-rlhbay4p/*",
+                        ]
+                    },
+                ]
+              - Version   = "2012-10-17"
+            }
+        ) -> null
+      - role        = "TwinMakerExecutionRole-rlhbay4p" -> null
+        # (1 unchanged attribute hidden)
+    }
+
+  # aws_iam_role_policy_attachment.lambda_basic_execution will be destroyed
+  - resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
+      - id         = "UR3LambdaExecutionRole-rlhbay4p-20251022160609291900000001" -> null
+      - policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" -> null
+      - role       = "UR3LambdaExecutionRole-rlhbay4p" -> null
+    }
+
+  # aws_iot_policy.ur3_robot_policy will be destroyed
+  - resource "aws_iot_policy" "ur3_robot_policy" {
+      - arn                = "arn:aws:iot:us-east-1:442729101031:policy/UR3RobotPolicy-rlhbay4p" -> null
+      - default_version_id = "1" -> null
+      - id                 = "UR3RobotPolicy-rlhbay4p" -> null
+      - name               = "UR3RobotPolicy-rlhbay4p" -> null
+      - policy             = jsonencode(
+            {
+              - Statement = [
+                  - {
+                      - Action   = [
+                          - "iot:Connect",
+                          - "iot:Publish",
+                          - "iot:Subscribe",
+                          - "iot:Receive",
+                        ]
+                      - Effect   = "Allow"
+                      - Resource = [
+                          - "*",
+                        ]
+                    },
+                ]
+              - Version   = "2012-10-17"
+            }
+        ) -> null
+      - tags               = {} -> null
+      - tags_all           = {} -> null
+    }
+
+  # aws_iot_thing.ur3_robot_thing will be destroyed
+  - resource "aws_iot_thing" "ur3_robot_thing" {
+      - arn               = "arn:aws:iot:us-east-1:442729101031:thing/UR3-Robot-001" -> null
+      - attributes        = {} -> null
+      - default_client_id = "UR3-Robot-001" -> null
+      - id                = "UR3-Robot-001" -> null
+      - name              = "UR3-Robot-001" -> null
+      - thing_type_name   = "UR3RobotType" -> null
+      - version           = 1 -> null
+    }
+
+  # aws_iot_thing_type.ur3_robot_thing_type will be destroyed
+  - resource "aws_iot_thing_type" "ur3_robot_thing_type" {
+      - arn        = "arn:aws:iot:us-east-1:442729101031:thingtype/UR3RobotType" -> null
+      - deprecated = false -> null
+      - id         = "UR3RobotType" -> null
+      - name       = "UR3RobotType" -> null
+      - tags       = {} -> null
+      - tags_all   = {} -> null
+
+      - properties {
+          - description           = "UR3 Robot Thing Type" -> null
+          - searchable_attributes = [] -> null
+        }
+    }
+
+  # aws_iot_topic_rule.ur3_command_rule will be destroyed
+  - resource "aws_iot_topic_rule" "ur3_command_rule" {
+      - arn         = "arn:aws:iot:us-east-1:442729101031:rule/UR3CommandRulerlhbay4p" -> null
+      - description = "Handle UR3 Robot commands from TwinMaker" -> null
+      - enabled     = true -> null
+      - id          = "UR3CommandRulerlhbay4p" -> null
+      - name        = "UR3CommandRulerlhbay4p" -> null
+      - sql         = "SELECT * FROM 'ur3/robot/commands'" -> null
+      - sql_version = "2016-03-23" -> null
+      - tags        = {} -> null
+      - tags_all    = {} -> null
+
+      - lambda {
+          - function_arn = "arn:aws:lambda:us-east-1:442729101031:function:ur3-data-processor-rlhbay4p" -> null
+        }
+    }
+
+  # aws_iot_topic_rule.ur3_data_rule will be destroyed
+  - resource "aws_iot_topic_rule" "ur3_data_rule" {
+      - arn         = "arn:aws:iot:us-east-1:442729101031:rule/UR3DataProcessingRulerlhbay4p" -> null
+      - description = "Process UR3 Robot telemetry data" -> null
+      - enabled     = true -> null
+      - id          = "UR3DataProcessingRulerlhbay4p" -> null
+      - name        = "UR3DataProcessingRulerlhbay4p" -> null
+      - sql         = "SELECT * FROM 'ur3/robot/telemetry'" -> null
+      - sql_version = "2016-03-23" -> null
+      - tags        = {} -> null
+      - tags_all    = {} -> null
+
+      - lambda {
+          - function_arn = "arn:aws:lambda:us-east-1:442729101031:function:ur3-data-processor-rlhbay4p" -> null
+        }
+    }
+
+  # aws_lambda_function.ur3_data_processor will be destroyed
+  - resource "aws_lambda_function" "ur3_data_processor" {
+      - architectures                  = [
+          - "x86_64",
+        ] -> null
+      - arn                            = "arn:aws:lambda:us-east-1:442729101031:function:ur3-data-processor-rlhbay4p" -> null
+      - code_sha256                    = "Ye7xLUXGJqPNalqEQ3pcyE9QC04QSC/9TEGfdrotYUA=" -> null
+      - filename                       = "ur3_lambda.zip" -> null
+      - function_name                  = "ur3-data-processor-rlhbay4p" -> null
+      - handler                        = "lambda_function.lambda_handler" -> null
+      - id                             = "ur3-data-processor-rlhbay4p" -> null
+      - invoke_arn                     = "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:442729101031:function:ur3-data-processor-rlhbay4p/invocations" -> null
+      - last_modified                  = "2025-10-22T16:06:20.191+0000" -> null
+      - layers                         = [] -> null
+      - memory_size                    = 128 -> null
+      - package_type                   = "Zip" -> null
+      - publish                        = false -> null
+      - qualified_arn                  = "arn:aws:lambda:us-east-1:442729101031:function:ur3-data-processor-rlhbay4p:$LATEST" -> null
+      - qualified_invoke_arn           = "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:442729101031:function:ur3-data-processor-rlhbay4p:$LATEST/invocations" -> null
+      - reserved_concurrent_executions = -1 -> null
+      - role                           = "arn:aws:iam::442729101031:role/UR3LambdaExecutionRole-rlhbay4p" -> null
+      - runtime                        = "python3.9" -> null
+      - skip_destroy                   = false -> null
+      - source_code_size               = 3332 -> null
+      - tags                           = {} -> null
+      - tags_all                       = {} -> null
+      - timeout                        = 30 -> null
+      - version                        = "$LATEST" -> null
+        # (7 unchanged attributes hidden)
+
+      - environment {
+          - variables = {
+              - "ENTITY_ID"    = "ur3-robot-001"
+              - "S3_BUCKET"    = "ur3-twin-scene-rlhbay4p"
+              - "WORKSPACE_ID" = "ur3-workspace-terraform"
+            } -> null
+        }
+
+      - ephemeral_storage {
+          - size = 512 -> null
+        }
+
+      - logging_config {
+          - log_format            = "Text" -> null
+          - log_group             = "/aws/lambda/ur3-data-processor-rlhbay4p" -> null
+            # (2 unchanged attributes hidden)
+        }
+
+      - tracing_config {
+          - mode = "PassThrough" -> null
+        }
+    }
+
+  # aws_lambda_permission.allow_iot will be destroyed
+  - resource "aws_lambda_permission" "allow_iot" {
+      - action              = "lambda:InvokeFunction" -> null
+      - function_name       = "ur3-data-processor-rlhbay4p" -> null
+      - id                  = "AllowExecutionFromIoT" -> null
+      - principal           = "iot.amazonaws.com" -> null
+      - source_arn          = "arn:aws:iot:us-east-1:442729101031:rule/UR3DataProcessingRulerlhbay4p" -> null
+      - statement_id        = "AllowExecutionFromIoT" -> null
+        # (2 unchanged attributes hidden)
+    }
+
+  # aws_lambda_permission.allow_twinmaker will be destroyed
+  - resource "aws_lambda_permission" "allow_twinmaker" {
+      - action                 = "lambda:InvokeFunction" -> null
+      - function_name          = "ur3-data-processor-rlhbay4p" -> null
+      - id                     = "AllowExecutionFromTwinMaker" -> null
+      - principal              = "iottwinmaker.amazonaws.com" -> null
+      - source_account         = "442729101031" -> null
+      - statement_id           = "AllowExecutionFromTwinMaker" -> null
+        # (5 unchanged attributes hidden)
+    }
+
+  # aws_s3_bucket.ur3_scene_bucket will be destroyed
+  - resource "aws_s3_bucket" "ur3_scene_bucket" {
+      - arn                         = "arn:aws:s3:::ur3-twin-scene-rlhbay4p" -> null
+      - bucket                      = "ur3-twin-scene-rlhbay4p" -> null
+      - bucket_domain_name          = "ur3-twin-scene-rlhbay4p.s3.amazonaws.com" -> null
+      - bucket_regional_domain_name = "ur3-twin-scene-rlhbay4p.s3.us-east-1.amazonaws.com" -> null
+      - force_destroy               = true -> null
+      - hosted_zone_id              = "Z3AQBSTGFYJSTF" -> null
+      - id                          = "ur3-twin-scene-rlhbay4p" -> null
+      - object_lock_enabled         = false -> null
+      - policy                      = jsonencode(
+            {
+              - Statement = [
+                  - {
+                      - Action    = [
+                          - "s3:GetObject",
+                          - "s3:PutObject",
+                          - "s3:DeleteObject",
+                          - "s3:ListBucket",
+                          - "s3:GetBucketLocation",
+                          - "s3:GetBucketVersioning",
+                        ]
+                      - Condition = {
+                          - StringEquals = {
+                              - "aws:SourceAccount" = "442729101031"
+                            }
+                        }
+                      - Effect    = "Allow"
+                      - Principal = {
+                          - Service = "iottwinmaker.amazonaws.com"
+                        }
+                      - Resource  = [
+                          - "arn:aws:s3:::ur3-twin-scene-rlhbay4p",
+                          - "arn:aws:s3:::ur3-twin-scene-rlhbay4p/*",
+                        ]
+                    },
+                  - {
+                      - Action    = [
+                          - "s3:GetObject",
+                          - "s3:PutObject",
+                          - "s3:DeleteObject",
+                          - "s3:ListBucket",
+                          - "s3:GetBucketLocation",
+                          - "s3:GetBucketVersioning",
+                        ]
+                      - Effect    = "Allow"
+                      - Principal = {
+                          - AWS = "arn:aws:iam::442729101031:role/TwinMakerExecutionRole-rlhbay4p"
+                        }
+                      - Resource  = [
+                          - "arn:aws:s3:::ur3-twin-scene-rlhbay4p",
+                          - "arn:aws:s3:::ur3-twin-scene-rlhbay4p/*",
+                        ]
+                    },
+                ]
+              - Version   = "2012-10-17"
+            }
+        ) -> null
+      - region                      = "us-east-1" -> null
+      - request_payer               = "BucketOwner" -> null
+      - tags                        = {} -> null
+      - tags_all                    = {} -> null
+        # (2 unchanged attributes hidden)
+
+      - cors_rule {
+          - allowed_headers = [
+              - "*",
+            ] -> null
+          - allowed_methods = [
+              - "POST",
+              - "GET",
+              - "DELETE",
+              - "PUT",
+            ] -> null
+          - allowed_origins = [
+              - "*",
+            ] -> null
+          - expose_headers  = [
+              - "ETag",
+            ] -> null
+          - max_age_seconds = 3000 -> null
+        }
+
+      - grant {
+          - id          = "45920955688d1d657f15b317bd28b60f35b25cd0ec4910b6ffc7ddfb4b086737" -> null
+          - permissions = [
+              - "FULL_CONTROL",
+            ] -> null
+          - type        = "CanonicalUser" -> null
+            # (1 unchanged attribute hidden)
+        }
+
+      - server_side_encryption_configuration {
+          - rule {
+              - bucket_key_enabled = false -> null
+
+              - apply_server_side_encryption_by_default {
+                  - sse_algorithm     = "AES256" -> null
+                    # (1 unchanged attribute hidden)
+                }
+            }
+        }
+
+      - versioning {
+          - enabled    = true -> null
+          - mfa_delete = false -> null
+        }
+    }
+
+  # aws_s3_bucket_cors_configuration.ur3_scene_bucket_cors will be destroyed
+  - resource "aws_s3_bucket_cors_configuration" "ur3_scene_bucket_cors" {
+      - bucket                = "ur3-twin-scene-rlhbay4p" -> null
+      - id                    = "ur3-twin-scene-rlhbay4p" -> null
+        # (1 unchanged attribute hidden)
+
+      - cors_rule {
+          - allowed_headers = [
+              - "*",
+            ] -> null
+          - allowed_methods = [
+              - "DELETE",
+              - "GET",
+              - "POST",
+              - "PUT",
+            ] -> null
+          - allowed_origins = [
+              - "*",
+            ] -> null
+          - expose_headers  = [
+              - "ETag",
+            ] -> null
+            id              = null
+          - max_age_seconds = 3000 -> null
+        }
+    }
+
+  # aws_s3_bucket_policy.ur3_scene_bucket_policy will be destroyed
+  - resource "aws_s3_bucket_policy" "ur3_scene_bucket_policy" {
+      - bucket = "ur3-twin-scene-rlhbay4p" -> null
+      - id     = "ur3-twin-scene-rlhbay4p" -> null
+      - policy = jsonencode(
+            {
+              - Statement = [
+                  - {
+                      - Action    = [
+                          - "s3:GetObject",
+                          - "s3:PutObject",
+                          - "s3:DeleteObject",
+                          - "s3:ListBucket",
+                          - "s3:GetBucketLocation",
+                          - "s3:GetBucketVersioning",
+                        ]
+                      - Condition = {
+                          - StringEquals = {
+                              - "aws:SourceAccount" = "442729101031"
+                            }
+                        }
+                      - Effect    = "Allow"
+                      - Principal = {
+                          - Service = "iottwinmaker.amazonaws.com"
+                        }
+                      - Resource  = [
+                          - "arn:aws:s3:::ur3-twin-scene-rlhbay4p",
+                          - "arn:aws:s3:::ur3-twin-scene-rlhbay4p/*",
+                        ]
+                    },
+                  - {
+                      - Action    = [
+                          - "s3:GetObject",
+                          - "s3:PutObject",
+                          - "s3:DeleteObject",
+                          - "s3:ListBucket",
+                          - "s3:GetBucketLocation",
+                          - "s3:GetBucketVersioning",
+                        ]
+                      - Effect    = "Allow"
+                      - Principal = {
+                          - AWS = "arn:aws:iam::442729101031:role/TwinMakerExecutionRole-rlhbay4p"
+                        }
+                      - Resource  = [
+                          - "arn:aws:s3:::ur3-twin-scene-rlhbay4p",
+                          - "arn:aws:s3:::ur3-twin-scene-rlhbay4p/*",
+                        ]
+                    },
+                ]
+              - Version   = "2012-10-17"
+            }
+        ) -> null
+    }
+
+  # aws_s3_bucket_public_access_block.ur3_scene_bucket_pab will be destroyed
+  - resource "aws_s3_bucket_public_access_block" "ur3_scene_bucket_pab" {
+      - block_public_acls       = false -> null
+      - block_public_policy     = false -> null
+      - bucket                  = "ur3-twin-scene-rlhbay4p" -> null
+      - id                      = "ur3-twin-scene-rlhbay4p" -> null
+      - ignore_public_acls      = false -> null
+      - restrict_public_buckets = false -> null
+    }
+
+  # aws_s3_bucket_versioning.ur3_scene_bucket_versioning will be destroyed
+  - resource "aws_s3_bucket_versioning" "ur3_scene_bucket_versioning" {
+      - bucket                = "ur3-twin-scene-rlhbay4p" -> null
+      - id                    = "ur3-twin-scene-rlhbay4p" -> null
+        # (1 unchanged attribute hidden)
+
+      - versioning_configuration {
+          - status     = "Enabled" -> null
+            # (1 unchanged attribute hidden)
+        }
+    }
+
+  # aws_s3_object.ur3_glb_file[0] will be destroyed
+  - resource "aws_s3_object" "ur3_glb_file" {
+      - arn                           = "arn:aws:s3:::ur3-twin-scene-rlhbay4p/models/ur3_robot.glb" -> null
+      - bucket                        = "ur3-twin-scene-rlhbay4p" -> null
+      - bucket_key_enabled            = false -> null
+      - content_type                  = "application/octet-stream" -> null
+      - etag                          = "7dbb056825a86d44388a861e946a87bd" -> null
+      - force_destroy                 = false -> null
+      - id                            = "models/ur3_robot.glb" -> null
+      - key                           = "models/ur3_robot.glb" -> null
+      - metadata                      = {} -> null
+      - server_side_encryption        = "AES256" -> null
+      - source                        = "./models/ur3_robot.glb" -> null
+      - storage_class                 = "STANDARD" -> null
+      - tags                          = {} -> null
+      - tags_all                      = {} -> null
+      - version_id                    = "mpWut4k7D1qryYb1luE1q.kVtZrJfF0j" -> null
+        # (13 unchanged attributes hidden)
+    }
+
+  # null_resource.twinmaker_setup will be destroyed
+  - resource "null_resource" "twinmaker_setup" {
+      - id       = "1583093413177691222" -> null
+      - triggers = {
+          - "entity_id"    = "ur3-robot-001"
+          - "iam_role_arn" = "arn:aws:iam::442729101031:role/TwinMakerExecutionRole-rlhbay4p"
+          - "lambda_arn"   = "arn:aws:lambda:us-east-1:442729101031:function:ur3-data-processor-rlhbay4p"
+          - "region"       = "us-east-1"
+          - "s3_bucket"    = "ur3-twin-scene-rlhbay4p"
+          - "scene_id"     = "ur3-robot-scene"
+          - "workspace_id" = "ur3-workspace-terraform"
+        } -> null
+    }
+
+  # random_string.bucket_suffix will be destroyed
+  - resource "random_string" "bucket_suffix" {
+      - id          = "rlhbay4p" -> null
+      - length      = 8 -> null
+      - lower       = true -> null
+      - min_lower   = 0 -> null
+      - min_numeric = 0 -> null
+      - min_special = 0 -> null
+      - min_upper   = 0 -> null
+      - number      = true -> null
+      - numeric     = true -> null
+      - result      = "rlhbay4p" -> null
+      - special     = false -> null
+      - upper       = false -> null
+    }
+
+  # time_sleep.wait_for_iam will be destroyed
+  - resource "time_sleep" "wait_for_iam" {
+      - create_duration = "90s" -> null
+      - id              = "2025-10-22T16:07:57Z" -> null
+    }
+
+Plan: 0 to add, 0 to change, 24 to destroy.
+
+Changes to Outputs:
+  - aws_account_id                 = "442729101031" -> null
+  - aws_region                     = "us-east-1" -> null
+  - command_topic                  = "ur3/robot/commands" -> null
+  - component_name                 = "ur3_telemetry" -> null
+  - component_type_id              = "com.ur3.robot.telemetry" -> null
+  - debug_info                     = {
+      - entity_id    = "ur3-robot-001"
+      - iam_role_arn = "arn:aws:iam::442729101031:role/TwinMakerExecutionRole-rlhbay4p"
+      - lambda_arn   = "arn:aws:lambda:us-east-1:442729101031:function:ur3-data-processor-rlhbay4p"
+      - region       = "us-east-1"
+      - s3_bucket    = "ur3-twin-scene-rlhbay4p"
+      - scene_id     = "ur3-robot-scene"
+      - workspace_id = "ur3-workspace-terraform"
+    } -> null
+  - entity_id                      = "ur3-robot-001" -> null
+  - iam_role_arn                   = "arn:aws:iam::442729101031:role/TwinMakerExecutionRole-rlhbay4p" -> null
+  - iot_policy_name                = "UR3RobotPolicy-rlhbay4p" -> null
+  - iot_test_console_url           = "https://console.aws.amazon.com/iot/home?region=us-east-1#/test" -> null
+  - iot_thing_name                 = "UR3-Robot-001" -> null
+  - lambda_console_url             = "https://console.aws.amazon.com/lambda/home?region=us-east-1#/functions/ur3-data-processor-rlhbay4p" -> null
+  - lambda_function_arn            = "arn:aws:lambda:us-east-1:442729101031:function:ur3-data-processor-rlhbay4p" -> null
+  - lambda_function_name           = "ur3-data-processor-rlhbay4p" -> null
+  - s3_bucket_name                 = "ur3-twin-scene-rlhbay4p" -> null
+  - s3_console_url                 = "https://s3.console.aws.amazon.com/s3/buckets/ur3-twin-scene-rlhbay4p" -> null
+  - scene_id                       = "ur3-robot-scene" -> null
+  - telemetry_topic                = "ur3/robot/telemetry" -> null
+  - test_commands                  = {
+      - check_entity   = "aws iottwinmaker get-entity --workspace-id ur3-workspace-terraform --entity-id ur3-robot-001"
+      - get_property   = "aws iottwinmaker get-property-value --workspace-id ur3-workspace-terraform --entity-id ur3-robot-001 --component-name ur3_telemetry --property-name joint1_position"
+      - list_scenes    = "aws iottwinmaker list-scenes --workspace-id ur3-workspace-terraform"
+      - send_telemetry = "aws iot-data publish --topic 'ur3/robot/telemetry' --payload '{\"joint1_position\": 1.57, \"joint2_position\": -0.78, \"joint3_position\": 0.78, \"robot_status\": \"MOVING\"}'"
+      - test_lambda    = "aws lambda invoke --function-name ur3-data-processor-rlhbay4p --payload '{\"joint1_position\": 0.5, \"joint2_position\": -0.5, \"joint3_position\": 0.5, \"robot_status\": \"IDLE\"}' response.json"
+    } -> null
+  - twinmaker_console_url          = "https://us-east-1.console.aws.amazon.com/iottwinmaker/home?region=us-east-1#/workspaces/ur3-workspace-terraform" -> null
+  - twinmaker_dashboard_url        = "https://console.aws.amazon.com/iottwinmaker/home?region=us-east-1#/workspaces/ur3-workspace-terraform/dashboard" -> null
+  - twinmaker_workspace_direct_url = "https://console.aws.amazon.com/iottwinmaker/home?region=us-east-1#/workspaces/ur3-workspace-terraform/dashboard" -> null
+  - twinmaker_workspace_url        = "https://us-east-1.console.aws.amazon.com/iottwinmaker/home?region=us-east-1#/workspaces/ur3-workspace-terraform" -> null
+  - workspace_id                   = "ur3-workspace-terraform" -> null

@@ -37,7 +37,8 @@ resource "random_string" "bucket_suffix" {
 
 # S3 bucket a GLB fájlhoz és scene adatokhoz
 resource "aws_s3_bucket" "ur3_scene_bucket" {
-  bucket = "ur3-twin-scene-${random_string.bucket_suffix.result}"
+  bucket        = "ur3-twin-scene-${random_string.bucket_suffix.result}"
+  force_destroy = true
 }
 
 resource "aws_s3_bucket_versioning" "ur3_scene_bucket_versioning" {

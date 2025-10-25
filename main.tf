@@ -4,6 +4,14 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.0"
+    }
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.7"
+    }
   }
 }
 
@@ -303,12 +311,12 @@ data "archive_file" "lambda_zip" {
 
 # Lambda Function
 resource "aws_lambda_function" "ur3_data_processor" {
-  filename         = "ur3_lambda.zip"
+  filename         = data.archive_file.lambda_zip.output_path
   function_name    = "ur3-data-processor-${random_string.bucket_suffix.result}"
-  role            = aws_iam_role.lambda_execution_role.arn
-  handler         = "lambda_function.lambda_handler"
-  runtime         = "python3.9"
-  timeout         = 30
+  role             = aws_iam_role.lambda_execution_role.arn
+  handler          = "lambda_function.lambda_handler"
+  runtime          = "python3.9"
+  timeout          = 30
 
   environment {
     variables = {
@@ -318,7 +326,7 @@ resource "aws_lambda_function" "ur3_data_processor" {
     }
   }
 
-  depends_on = [data.archive_file.lambda_zip]
+  # removed depends_on = [data.archive_file.lambda_zip] because filename now references the data.source
 }
 
 # Lambda permission for IoT
@@ -413,7 +421,7 @@ resource "time_sleep" "wait_for_iam" {
 }
 
 # TwinMaker Workspace és kapcsolódó erőforrások létrehozása
-resource "null_resource" "create_twinmaker_resources" {
+resource "null_resource" "twinmaker_setup" {
   depends_on = [
     aws_s3_bucket.ur3_scene_bucket,
     aws_s3_bucket_policy.ur3_scene_bucket_policy,
@@ -425,279 +433,42 @@ resource "null_resource" "create_twinmaker_resources" {
   ]
 
   triggers = {
-    workspace_id   = local.workspace_id
-    entity_id      = local.entity_id
-    scene_id       = local.scene_id
-    iam_role_arn   = aws_iam_role.twinmaker_execution_role.arn
-    s3_bucket      = aws_s3_bucket.ur3_scene_bucket.bucket
-    lambda_arn     = aws_lambda_function.ur3_data_processor.arn
-    region         = var.aws_region
+    workspace_id = local.workspace_id
+    entity_id    = local.entity_id
+    scene_id     = local.scene_id
+    iam_role_arn = aws_iam_role.twinmaker_execution_role.arn
+    s3_bucket    = aws_s3_bucket.ur3_scene_bucket.bucket
+    lambda_arn   = aws_lambda_function.ur3_data_processor.arn
+    region       = var.aws_region
   }
 
   provisioner "local-exec" {
     command = <<-EOT
-      set -e
-      
-      echo "=== TwinMaker Workspace Creation ==="
-      echo "Workspace ID: ${local.workspace_id}"
-      echo "IAM Role ARN: ${aws_iam_role.twinmaker_execution_role.arn}"
-      echo "S3 Bucket: ${aws_s3_bucket.ur3_scene_bucket.bucket}"
-      echo "Lambda ARN: ${aws_lambda_function.ur3_data_processor.arn}"
-      echo "AWS Region: ${var.aws_region}"
-      
-      # AWS konfigurációjának ellenőrzése
-      echo "Checking AWS configuration..."
-      aws sts get-caller-identity
-      
-      # IAM szerepkör ellenőrzése
-      echo "Checking IAM role..."
-      aws iam get-role --role-name TwinMakerExecutionRole-${random_string.bucket_suffix.result}
-      
-      # S3 bucket ellenőrzése
-      echo "Checking S3 bucket..."
-      aws s3 ls s3://${aws_s3_bucket.ur3_scene_bucket.bucket}/
-      
-      # Workspace létrehozása vagy ellenőrzése
-      echo "Checking if workspace exists..."
-      if aws iottwinmaker get-workspace --workspace-id ${local.workspace_id} 2>/dev/null; then
-        echo "Workspace already exists, checking state..."
-      else
-        echo "Creating TwinMaker workspace..."
-        aws iottwinmaker create-workspace \
-          --workspace-id ${local.workspace_id} \
-          --description "UR3 Robot Digital Twin Workspace" \
-          --role ${aws_iam_role.twinmaker_execution_role.arn} \
-          --s3-location ${aws_s3_bucket.ur3_scene_bucket.arn} \
-          --region ${var.aws_region}
-      fi
-
-      # Workspace állapotának várása
-      echo "Waiting for workspace to become active..."
-      TIMEOUT=1800  # 30 perc
-      ELAPSED=0
-      
-      while [ $ELAPSED -lt $TIMEOUT ]; do
-        WORKSPACE_STATE=$(aws iottwinmaker get-workspace --workspace-id ${local.workspace_id} --query 'state' --output text 2>/dev/null || echo "NONE")
-        echo "Workspace state: $WORKSPACE_STATE (elapsed: $${ELAPSED}s)"
-        
-        if [ "$WORKSPACE_STATE" = "ACTIVE" ]; then
-          echo "Workspace is now ACTIVE!"
-          break
-        elif [ "$WORKSPACE_STATE" = "ERROR" ]; then
-          echo "Workspace entered ERROR state!"
-          aws iottwinmaker get-workspace --workspace-id ${local.workspace_id}
-          exit 1
-        fi
-        
-        sleep 60
-        ELAPSED=$((ELAPSED + 60))
-      done
-
-      if [ "$WORKSPACE_STATE" != "ACTIVE" ]; then
-        echo "ERROR: Workspace failed to become active after $TIMEOUT seconds. Final state: $WORKSPACE_STATE"
-        exit 1
-      fi
-
-      # Component type létrehozása
-      echo "Creating component type..."
-      cat > /tmp/component_type.json << EOF
-{
-  "description": "UR3 Robot Telemetry Component with Data Connector",
-  "isSingleton": true,
-  "functions": {
-    "dataReader": {
-      "implementedBy": {
-        "lambda": {
-          "arn": "${aws_lambda_function.ur3_data_processor.arn}"
-        }
-      },
-      "isInherited": false,
-      "scope": "ENTITY"
-    }
-  },
-  "propertyDefinitions": {
-    "joint1_position": {
-      "dataType": { "type": "DOUBLE" },
-      "isTimeSeries": true,
-      "isStoredExternally": true,
-      "defaultValue": { "doubleValue": 0.0 },
-      "isRequiredInEntity": false
-    },
-    "joint2_position": {
-      "dataType": { "type": "DOUBLE" },
-      "isTimeSeries": true,
-      "isStoredExternally": true,
-      "defaultValue": { "doubleValue": 0.0 },
-      "isRequiredInEntity": false
-    },
-    "joint3_position": {
-      "dataType": { "type": "DOUBLE" },
-      "isTimeSeries": true,
-      "isStoredExternally": true,
-      "defaultValue": { "doubleValue": 0.0 },
-      "isRequiredInEntity": false
-    },
-    "robot_status": {
-      "dataType": { "type": "STRING" },
-      "isTimeSeries": true,
-      "isStoredExternally": true,
-      "defaultValue": { "stringValue": "IDLE" },
-      "isRequiredInEntity": false
-    },
-    "joint1_target": {
-      "dataType": { "type": "DOUBLE" },
-      "isTimeSeries": false,
-      "isStoredExternally": false,
-      "defaultValue": { "doubleValue": 0.0 },
-      "isRequiredInEntity": false
-    },
-    "joint2_target": {
-      "dataType": { "type": "DOUBLE" },
-      "isTimeSeries": false,
-      "isStoredExternally": false,
-      "defaultValue": { "doubleValue": 0.0 },
-      "isRequiredInEntity": false
-    },
-    "joint3_target": {
-      "dataType": { "type": "DOUBLE" },
-      "isTimeSeries": false,
-      "isStoredExternally": false,
-      "defaultValue": { "doubleValue": 0.0 },
-      "isRequiredInEntity": false
-    }
-  }
-}
-EOF
-
-      aws iottwinmaker create-component-type \
-        --workspace-id ${local.workspace_id} \
-        --component-type-id com.ur3.robot.telemetry \
-        --cli-input-json file:///tmp/component_type.json || {
-        
-        echo "Component type creation failed, checking if it already exists..."
-        aws iottwinmaker get-component-type \
-          --workspace-id ${local.workspace_id} \
-          --component-type-id com.ur3.robot.telemetry && echo "Component type already exists"
-      }
-
-      sleep 15
-
-      # Entity létrehozása
-      echo "Creating entity..."
-      cat > /tmp/entity.json << EOF
-{
-  "entityName": "UR3 Robot 001",
-  "description": "UR3 Robot Digital Twin Entity",
-  "components": {
-    "ur3_telemetry": {
-      "componentTypeId": "com.ur3.robot.telemetry",
-      "properties": {
-        "joint1_position": {
-          "value": { "doubleValue": 0.0 }
-        },
-        "joint2_position": {
-          "value": { "doubleValue": 0.0 }
-        },
-        "joint3_position": {
-          "value": { "doubleValue": 0.0 }
-        },
-        "robot_status": {
-          "value": { "stringValue": "IDLE" }
-        },
-        "joint1_target": {
-          "value": { "doubleValue": 0.0 }
-        },
-        "joint2_target": {
-          "value": { "doubleValue": 0.0 }
-        },
-        "joint3_target": {
-          "value": { "doubleValue": 0.0 }
-        }
-      }
-    }
-  }
-}
-EOF
-
-      aws iottwinmaker create-entity \
+      python3 ${path.module}/twinmaker_setup.py \
+        --region ${var.aws_region} \
         --workspace-id ${local.workspace_id} \
         --entity-id ${local.entity_id} \
-        --cli-input-json file:///tmp/entity.json || {
-        
-        echo "Entity creation failed, checking if it already exists..."
-        aws iottwinmaker get-entity \
-          --workspace-id ${local.workspace_id} \
-          --entity-id ${local.entity_id} && echo "Entity already exists"
-      }
-
-      sleep 10
-
-      # Scene létrehozása
-      echo "Creating scene..."
-      
-      # Scene content feltöltése S3-ba
-      cat > /tmp/scene_content.json << EOF
-{
-  "version": "1.0",
-  "unit": "meters",
-  "nodes": [
-    {
-      "name": "UR3_Robot_001",
-      "transform": {
-        "position": [0, 0, 0],
-        "rotation": [0, 0, 0],
-        "scale": [1, 1, 1]
-      },
-      "properties": {
-        "entityId": "${local.entity_id}",
-        "componentName": "ur3_telemetry"
-      },
-      "children": []
-    }
-  ],
-  "rootNodeIndexes": [0]
-}
-EOF
-
-      # Upload scene content to S3
-      aws s3 cp /tmp/scene_content.json s3://${aws_s3_bucket.ur3_scene_bucket.bucket}/scenes/${local.scene_id}.json
-
-      # Create scene in TwinMaker
-      aws iottwinmaker create-scene \
-        --workspace-id ${local.workspace_id} \
         --scene-id ${local.scene_id} \
-        --content-location "arn:aws:s3:::${aws_s3_bucket.ur3_scene_bucket.bucket}/scenes/${local.scene_id}.json" \
-        --description "UR3 Robot 3D Scene" || {
-        
-        echo "Scene creation failed, checking if it already exists..."
-        aws iottwinmaker get-scene \
-          --workspace-id ${local.workspace_id} \
-          --scene-id ${local.scene_id} && echo "Scene already exists"
-      }
-
-      echo "TwinMaker resources created successfully!"
-      
-      # Cleanup temp files
-      rm -f /tmp/component_type.json /tmp/entity.json /tmp/scene_content.json
+        --role-arn ${aws_iam_role.twinmaker_execution_role.arn} \
+        --s3-bucket ${aws_s3_bucket.ur3_scene_bucket.bucket} \
+        --lambda-arn ${aws_lambda_function.ur3_data_processor.arn}
     EOT
   }
-
   provisioner "local-exec" {
     when    = destroy
     command = <<-EOT
-      echo "Cleaning up TwinMaker resources..."
-      aws iottwinmaker delete-entity --workspace-id ur3-workspace-terraform --entity-id ur3-robot-001 2>/dev/null || true
-      sleep 10
-      aws iottwinmaker delete-component-type --workspace-id ur3-workspace-terraform --component-type-id com.ur3.robot.telemetry 2>/dev/null || true
-      sleep 10
-      aws iottwinmaker delete-scene --workspace-id ur3-workspace-terraform --scene-id ur3-robot-scene 2>/dev/null || true
-      sleep 10
-      aws iottwinmaker delete-workspace --workspace-id ur3-workspace-terraform 2>/dev/null || true
-      echo "TwinMaker cleanup completed"
+      python3 ${path.module}/twinmaker_setup.py \
+        --region ${self.triggers.region} \
+        --workspace-id ${self.triggers.workspace_id} \
+        --entity-id ${self.triggers.entity_id} \
+        --scene-id ${self.triggers.scene_id} \
+        --role-arn ${self.triggers.iam_role_arn} \
+        --s3-bucket ${self.triggers.s3_bucket} \
+        --lambda-arn ${self.triggers.lambda_arn} \
+        --cleanup
     EOT
   }
 }
-
 # Debug outputs
 output "debug_info" {
   value = {

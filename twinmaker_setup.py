@@ -187,10 +187,15 @@ class TwinMakerSetup:
     def _get_initial_properties(self) -> Dict[str, Any]:
         """Get initial property values for entity"""
         properties = {}
+        # Only set initial values for properties that are NOT stored externally.
+        # joint*_position and robot_status are declared with isStoredExternally=True
+        # in the component type, so we must NOT provide DataValues for them here.
         for i in range(1, 4):
-            properties[f"joint{i}_position"] = {"value": {"doubleValue": 0.0}}
+            # joint{i}_position is externally stored -> skip
             properties[f"joint{i}_target"] = {"value": {"doubleValue": 0.0}}
-        properties["robot_status"] = {"value": {"stringValue": "IDLE"}}
+
+        # If you want robot_status to have an initial value inside TwinMaker,
+        # set isStoredExternally to False in _get_property_definitions instead.
         return properties
     
     def create_scene(self) -> bool:

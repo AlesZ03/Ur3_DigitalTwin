@@ -29,6 +29,8 @@ output "lambda_function_arn" {
   value       = aws_lambda_function.ur3_data_processor.arn
 }
 
+
+
 output "iam_role_arn" {
   description = "TwinMaker execution role ARN"
   value       = aws_iam_role.twinmaker_execution_role.arn

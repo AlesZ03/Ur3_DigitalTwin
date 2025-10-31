@@ -470,6 +470,200 @@ resource "null_resource" "twinmaker_setup" {
     EOT
   }
 }
+########################################################################################################################
+#                                     SQS-terraform conf                                                               #
+########################################################################################################################
+
+
+#INCOMING: Fizikai eszköz → Cloud (adatok fogadása)
+module "device_to_cloud_queue" {
+  source = "./modules/sqs"
+
+  queue_name                    = "${var.project_name}-device-to-cloud"
+  visibility_timeout_seconds    = 300
+  message_retention_seconds     = 1209600  // 14 nap
+  max_message_size              = 262144   // 256 KB
+  delay_seconds                 = 0
+  receive_wait_time_seconds     = 10       // Long polling
+  
+  enable_dlq                    = true
+  max_receive_count             = 3
+  
+  tags = {
+    Project     = var.common_tags["Project"]
+    Environment = var.common_tags["Environment"]
+    ManagedBy   = var.common_tags["ManagedBy"]
+    Direction   = "Inbound"
+    Purpose     = "Device telemetry and status"
+  }
+}
+
+// OUTGOING: Cloud → Fizikai eszköz (parancsok visszaküldése)
+module "cloud_to_device_queue" {
+  source = "./modules/sqs"
+
+  queue_name                    = "${var.project_name}-cloud-to-device"
+  visibility_timeout_seconds    = 300
+  message_retention_seconds     = 604800   // 7 nap (parancsok gyorsabban elévülnek)
+  max_message_size              = 262144
+  delay_seconds                 = 0
+  receive_wait_time_seconds     = 10
+  
+  enable_dlq                    = true
+  max_receive_count             = 5        // Több újrapróbálkozás parancsokhoz
+  
+  tags = {
+    Project     = var.common_tags["Project"]
+    Environment = var.common_tags["Environment"]
+    ManagedBy   = var.common_tags["ManagedBy"]
+    Direction   = "Outbound"
+    Purpose     = "Commands and control signals"
+  }
+}
+
+// IAM role a fizikai eszköz számára (IoT Core vagy direkt SQS access)
+resource "aws_iam_role" "device_role" {
+  name = "${var.project_name}-device-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "iot.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "device_policy" {
+  name = "${var.project_name}-device-policy"
+  role = aws_iam_role.device_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:GetQueueUrl"
+        ]
+        Resource = module.device_to_cloud_queue.queue_arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes"
+        ]
+        Resource = module.cloud_to_device_queue.queue_arn
+      }
+    ]
+  })
+}
+
+// IAM role a cloud-oldali feldolgozó számára (Lambda/EC2)
+resource "aws_iam_role" "cloud_processor_role" {
+  name = "${var.project_name}-cloud-processor-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = ["lambda.amazonaws.com", "ec2.amazonaws.com"]
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "cloud_processor_policy" {
+  name = "${var.project_name}-cloud-processor-policy"
+  role = aws_iam_role.cloud_processor_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes"
+        ]
+        Resource = module.device_to_cloud_queue.queue_arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage",
+          "sqs:GetQueueAttributes"
+        ]
+        Resource = module.cloud_to_device_queue.queue_arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+// CloudWatch Alarms
+resource "aws_cloudwatch_metric_alarm" "incoming_queue_depth" {
+  alarm_name          = "${var.project_name}-incoming-queue-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "1000"
+  alarm_description   = "Alert when too many unprocessed device messages"
+  
+  dimensions = {
+    QueueName = module.device_to_cloud_queue.queue_name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "outgoing_queue_age" {
+  alarm_name          = "${var.project_name}-outgoing-message-age"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "ApproximateAgeOfOldestMessage"
+  namespace           = "AWS/SQS"
+  period              = "300"
+  statistic           = "Maximum"
+  threshold           = "600"  // 10 perc
+  alarm_description   = "Alert when commands are not picked up by device"
+  
+  dimensions = {
+    QueueName = module.cloud_to_device_queue.queue_name
+  }
+}
+
+// SNS Topic riasztásokhoz (opcionális)
+resource "aws_sns_topic" "alerts" {
+  name = "${var.project_name}-alerts"
+}
+
+resource "aws_sns_topic_subscription" "alert_email" {
+  count     = var.alert_email != "" ? 1 : 0
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = var.alert_email
+}
+
 # Debug outputs
 output "debug_info" {
   value = {
@@ -499,3 +693,8 @@ output "twinmaker_workspace_direct_url" {
 # output "lambda_function_name" {
 #   value = aws_lambda_function.ur3_data_processor.function_name
 #}
+
+
+
+
+

@@ -28,3 +28,22 @@ variable "project_name" {
   type        = string
   default     = "ur3-digital-twin"
 }
+
+
+
+
+
+variable "alert_email" {
+  type        = string
+  default     = "balazsvajk2003@gmail.com"
+  description = "Email cím riasztásokhoz (opcionális)"
+}
+
+variable "common_tags" {
+  type = map(string)
+  default = {
+    Project     = "Robot Arm SQS Manager"
+    Environment = "production"
+    ManagedBy   = "Terraform"
+  }
+}

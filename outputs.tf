@@ -120,3 +120,27 @@ output "aws_account_id" {
   description = "AWS Account ID"
   value       = data.aws_caller_identity.current.account_id
 }
+
+
+
+output "s3_bucket_arn" {
+  description = "Az S3 bucket ARN-je"
+  value       = module.s3_robot_data.bucket_arn
+}
+
+output "s3_bucket_id" {
+  description = "Az S3 bucket ID-ja"
+  value       = module.s3_robot_data.bucket_id
+}
+
+
+
+output "lambda_role_arn" {
+  description = "A Lambda IAM role ARN-je"
+  value       = module.lambda_robot_processor.role_arn
+}
+
+output "lambda_log_group_name" {
+  description = "A Lambda CloudWatch Log Group neve"
+  value       = module.lambda_robot_processor.log_group_name
+}

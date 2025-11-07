@@ -521,6 +521,66 @@ module "cloud_to_device_queue" {
   }
 }
 
+module "s3_robot_data" {
+  source = "./modules/s3-sqs-data"
+
+  # Automatikusan generált egyedi bucket név
+  bucket_name          = "robot-data-storage-${data.aws_caller_identity.current.account_id}"
+  versioning_enabled   = var.s3_versioning_enabled
+  encryption_algorithm = var.s3_encryption_algorithm
+
+  lifecycle_rules = [
+    {
+      id              = "archive-old-data"
+      status          = "Enabled"
+      prefix          = "robot-data/"
+      expiration_days = null
+      transitions = [
+        {
+          days          = 30
+          storage_class = "STANDARD_IA"
+        },
+        {
+          days          = 90
+          storage_class = "GLACIER"
+        }
+      ]
+    }
+  ]
+
+  tags = var.common_tags
+}
+ 
+
+# Lambda modul
+module "lambda_robot_processor" {
+  source = "./modules/lambda-sqs"
+
+  function_name    = var.lambda_function_name
+  lambda_zip_path  = var.lambda_zip_path
+  handler          = var.lambda_handler
+  runtime          = var.lambda_runtime
+  timeout          = var.lambda_timeout
+  memory_size      = var.lambda_memory_size
+  
+  # SQS trigger beállítása - KÖZVETLENÜL A MODULBÓL
+  sqs_queue_arn       = module.device_to_cloud_queue.queue_arn
+  sqs_batch_size      = var.lambda_sqs_batch_size
+  sqs_trigger_enabled = var.lambda_sqs_trigger_enabled
+  maximum_concurrency = var.lambda_max_concurrency
+
+  # S3 konfiguráció - KÖZVETLENÜL A MODULBÓL
+  s3_bucket_name = module.s3_robot_data.bucket_name
+  s3_bucket_arn  = module.s3_robot_data.bucket_arn
+
+  environment_variables = var.lambda_environment_variables
+  log_retention_days    = var.lambda_log_retention_days
+
+  tags = var.common_tags
+}
+
+
+
 // IAM role a fizikai eszköz számára (IoT Core vagy direkt SQS access)
 resource "aws_iam_role" "device_role" {
   name = "${var.project_name}-device-role"

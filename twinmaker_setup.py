@@ -213,6 +213,7 @@ class TwinMakerSetup:
         
         # Upload scene content to S3
         scene_content = {
+            "specVersion": "1.0",
             "version": "1.0",
             "unit": "meters",
             "nodes": [

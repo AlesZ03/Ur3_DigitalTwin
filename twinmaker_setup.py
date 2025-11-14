@@ -224,6 +224,13 @@ class TwinMakerSetup:
                         "rotation": [0, 0, 0],
                         "scale": [1, 1, 1]
                     },
+                    "components": [
+                        {
+                            "type": "ModelRef",
+                            "uri": f"s3://{self.s3_bucket}/models/ur3_robot.glb",
+                            "modelType": "GLB"
+                        }
+                    ],
                     "properties": {
                         "entityId": self.entity_id,
                         "componentName": "ur3_telemetry"

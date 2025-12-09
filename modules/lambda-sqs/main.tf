@@ -1,3 +1,5 @@
+# modules/lambda/main.tf
+
 data "aws_caller_identity" "current" {}
 
 # IAM role a Lambda függvényhez

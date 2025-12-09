@@ -1,5 +1,3 @@
-# modules/lambda/variables.tf
-
 variable "function_name" {
   description = "A Lambda függvény neve"
   type        = string
@@ -8,7 +6,6 @@ variable "function_name" {
 variable "lambda_zip_path" {
   description = "A Lambda zip fájl elérési útja"
   type        = string
-  default = "./lambda-sqs/lambda_function.zip"
 }
 
 variable "handler" {

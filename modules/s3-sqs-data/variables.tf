@@ -1,4 +1,4 @@
-
+# modules/s3/variables.tf
 
 variable "bucket_name" {
   description = "Az S3 bucket neve"

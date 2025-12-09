@@ -1,3 +1,5 @@
+# modules/lambda/outputs.tf
+
 output "function_name" {
   description = "A Lambda függvény neve"
   value       = aws_lambda_function.function.function_name

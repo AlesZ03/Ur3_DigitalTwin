@@ -723,6 +723,277 @@ resource "aws_sns_topic_subscription" "alert_email" {
   protocol  = "email"
   endpoint  = var.alert_email
 }
+resource "aws_iam_role" "s3_read_lambda_role" {
+  name = "${var.project_name}-s3-read-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+
+  tags = var.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "s3_read_lambda_basic" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  role       = aws_iam_role.s3_read_lambda_role.name
+}
+
+resource "aws_iam_role_policy" "s3_read_lambda_policy" {
+  name = "${var.project_name}-s3-read-policy"
+  role = aws_iam_role.s3_read_lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket",
+          "s3:GetBucketLocation"
+        ]
+        Resource = [
+          module.s3_robot_data.bucket_arn,
+          "${module.s3_robot_data.bucket_arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# Lambda IAM role parancs küldéshez
+resource "aws_iam_role" "command_lambda_role" {
+  name = "${var.project_name}-command-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+
+  tags = var.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "command_lambda_basic" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  role       = aws_iam_role.command_lambda_role.name
+}
+
+resource "aws_iam_role_policy" "command_lambda_policy" {
+  name = "${var.project_name}-command-sqs-policy"
+  role = aws_iam_role.command_lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:GetQueueUrl"
+        ]
+        Resource = module.cloud_to_device_queue.queue_arn
+      }
+    ]
+  })
+}
+
+# Lambda ZIP fájlok
+data "archive_file" "s3_read_lambda" {
+  type        = "zip"
+  output_path = "${path.module}/lambda-dist/s3-read-logs.zip"
+  source {
+    content  = file("${path.module}/lambda/api/read_logs.py")
+    filename = "index.py"
+  }
+}
+
+data "archive_file" "command_lambda" {
+  type        = "zip"
+  output_path = "${path.module}/lambda-dist/send-command.zip"
+  source {
+    content  = file("${path.module}/lambda/api/send_command.py")
+    filename = "index.py"
+  }
+}
+
+# Lambda függvény az S3 logok olvasásához
+resource "aws_lambda_function" "s3_read_logs" {
+  filename         = data.archive_file.s3_read_lambda.output_path
+  function_name    = "${var.project_name}-read-logs"
+  role            = aws_iam_role.s3_read_lambda_role.arn
+  handler         = "index.lambda_handler"
+  runtime         = "python3.11"
+  timeout         = 30
+  source_code_hash = data.archive_file.s3_read_lambda.output_base64sha256
+
+  environment {
+    variables = {
+      S3_BUCKET_NAME = module.s3_robot_data.bucket_name
+    }
+  }
+
+  tags = var.common_tags
+}
+
+resource "aws_cloudwatch_log_group" "s3_read_logs_lambda" {
+  name              = "/aws/lambda/${aws_lambda_function.s3_read_logs.function_name}"
+  retention_in_days = 7
+
+  tags = var.common_tags
+}
+
+# Lambda függvény parancsok küldéséhez
+resource "aws_lambda_function" "send_command" {
+  filename         = data.archive_file.command_lambda.output_path
+  function_name    = "${var.project_name}-send-command"
+  role            = aws_iam_role.command_lambda_role.arn
+  handler         = "index.lambda_handler"
+  runtime         = "python3.11"
+  timeout         = 30
+  source_code_hash = data.archive_file.command_lambda.output_base64sha256
+
+  environment {
+    variables = {
+      COMMAND_QUEUE_URL = module.cloud_to_device_queue.queue_url
+    }
+  }
+
+  tags = var.common_tags
+}
+
+resource "aws_cloudwatch_log_group" "send_command_lambda" {
+  name              = "/aws/lambda/${aws_lambda_function.send_command.function_name}"
+  retention_in_days = 7
+
+  tags = var.common_tags
+}
+
+# API Gateway REST API
+module "logs_api" {
+  source = "./modules/api-gateway-rest"
+
+  api_name             = "${var.project_name}-logs-api"
+  api_description      = "REST API for reading robot logs from S3 and sending commands"
+  stage_name           = "prod"
+  
+  # Logs endpoint
+  lambda_invoke_arn    = aws_lambda_function.s3_read_logs.invoke_arn
+  lambda_function_name = aws_lambda_function.s3_read_logs.function_name
+  
+  # Command endpoint
+  command_lambda_invoke_arn    = aws_lambda_function.send_command.invoke_arn
+  command_lambda_function_name = aws_lambda_function.send_command.function_name
+
+  tags = var.common_tags
+}
+
+# Amplify IAM role
+resource "aws_iam_role" "amplify_role" {
+  name = "${var.project_name}-amplify-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "amplify.amazonaws.com"
+      }
+    }]
+  })
+
+  tags = var.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "amplify_backend" {
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess-Amplify"
+  role       = aws_iam_role.amplify_role.name
+}
+
+# Amplify App
+module "amplify_logs_dashboard" {
+  source = "./modules/amplify"
+
+  app_name    = "${var.project_name}-logs-dashboard"
+  branch_name = var.amplify_branch_name
+  framework   = "React"
+  stage       = "PRODUCTION"
+
+  repository_url = var.github_repo_url
+
+  environment_variables = {
+    REACT_APP_API_URL         = module.logs_api.api_url
+    REACT_APP_COMMAND_API_URL = module.logs_api.command_api_url
+    REACT_APP_AWS_REGION      = var.aws_region
+  }
+
+  branch_environment_variables = {
+    REACT_APP_API_URL         = module.logs_api.api_url
+    REACT_APP_COMMAND_API_URL = module.logs_api.command_api_url
+  }
+
+  build_spec = <<-EOT
+    version: 1
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        baseDirectory: build
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+  EOT
+
+  custom_rules = [
+    {
+      source = "/<*>"
+      status = "404"
+      target = "/index.html"
+    }
+  ]
+
+  iam_service_role_arn = aws_iam_role.amplify_role.arn
+
+  tags = var.common_tags
+}
+
+# Outputs
+output "api_logs_url" {
+  description = "REST API URL a logok lekéréséhez"
+  value       = module.logs_api.api_url
+}
+
+output "api_command_url" {
+  description = "REST API URL parancsok küldéséhez"
+  value       = module.logs_api.command_api_url
+}
+
+output "amplify_dashboard_url" {
+  description = "Amplify Dashboard URL"
+  value       = module.amplify_logs_dashboard.app_url
+}
+
 
 # Debug outputs
 output "debug_info" {

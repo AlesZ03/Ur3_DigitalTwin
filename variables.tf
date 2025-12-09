@@ -72,7 +72,7 @@ variable "lambda_function_name" {
 variable "lambda_zip_path" {
   description = "Lambda zip fájl elérési útja"
   type        = string
-  default     = "./lambda-sqs/lambda_function.zip"
+  default     = "./lambda/sqs/lambda_function.zip"
 }
 
 variable "lambda_handler" {
@@ -147,3 +147,16 @@ variable "common_tags" {
   }
 }
 
+
+# Amplify változók
+variable "github_repo_url" {
+  description = "GitHub repository URL az Amplify deploy-hoz (opcionális)"
+  type        = string
+  default     = null
+}
+
+variable "amplify_branch_name" {
+  description = "Amplify branch neve"
+  type        = string
+  default     = "main"
+}

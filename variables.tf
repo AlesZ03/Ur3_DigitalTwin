@@ -160,3 +160,23 @@ variable "amplify_branch_name" {
   type        = string
   default     = "main"
 }
+
+# GitHub integration
+variable "github_repo_owner" {
+  description = "GitHub repo owner (username vagy organization)"
+  type        = string
+  default     = "AlesZ03"
+}
+
+variable "github_repo_name" {
+  description = "GitHub repo name (pl. Ur3_DigitalTwin)"
+  type        = string
+  default     = "Ur3_DigitalTwin_deploy"
+}
+
+variable "github_personal_access_token" {
+  description = "GitHub personal access token (scope: repo, admin:repo_hook)"
+  type        = string
+  sensitive   = true
+
+}

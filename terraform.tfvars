@@ -11,3 +11,5 @@ glb_file_path = "./models/ur3_robot.glb"
 
 # Workspace configuration
 workspace_name = "ur3-workspace-terraform"
+
+github_personal_access_token = "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"

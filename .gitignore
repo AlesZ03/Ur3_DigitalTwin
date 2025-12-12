@@ -1,7 +1,13 @@
-.terraform/
+# Terraform
+*.tfvars
+*.tfplan
 *.tfstate
 *.tfstate.backup
-*.zip
+.terraform/
+destroy.tfplan
+plan.tfplan
+plan.json
+destroy.txt
 
 # Python
 # Byte-compiled / optimized / DLL files

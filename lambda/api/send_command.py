@@ -1,11 +1,16 @@
 import json
 import boto3
 import os
-from datetime import datetime
+import logging
+from datetime import datetime, timezone
 import uuid
 
+logging.basicConfig(level=logging.INFO)
 sqs = boto3.client('sqs')
-COMMAND_QUEUE_URL = os.environ['COMMAND_QUEUE_URL']
+COMMAND_QUEUE_URL = os.getenv('COMMAND_QUEUE_URL')
+if not COMMAND_QUEUE_URL:
+    # Fail fast during Lambda init so misconfiguration is obvious
+    raise RuntimeError('Missing required environment variable: COMMAND_QUEUE_URL')
 
 def lambda_handler(event, context):
     """
@@ -14,6 +19,18 @@ def lambda_handler(event, context):
     """
     
     try:
+        # CORS preflight
+        if event.get('httpMethod') == 'OPTIONS':
+            return {
+                'statusCode': 204,
+                'headers': {
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type'
+                },
+                'body': ''
+            }
+
         # Parse request body
         if 'body' not in event:
             return error_response(400, 'Missing request body')
@@ -25,11 +42,14 @@ def lambda_handler(event, context):
             return error_response(400, 'Missing command field')
         
         command = body['command']
+
+        if not isinstance(command, dict):
+            return error_response(400, 'command must be an object')
         
         # Parancs üzenet összeállítása
         message = {
             'command': command,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'messageId': str(uuid.uuid4()),
             'source': 'dashboard'
         }
@@ -38,7 +58,7 @@ def lambda_handler(event, context):
         if 'metadata' in body:
             message['metadata'] = body['metadata']
         
-        print(f"📤 Sending command to robot: {json.dumps(command)}")
+        logging.info("Sending command to robot: %s", json.dumps(command))
         
         # SQS-be küldés
         response = sqs.send_message(
@@ -56,7 +76,7 @@ def lambda_handler(event, context):
             }
         )
         
-        print(f"✓ Command sent successfully. MessageId: {response['MessageId']}")
+        logging.info("Command sent successfully. MessageId: %s", response.get('MessageId'))
         
         return success_response({
             'success': True,
@@ -69,9 +89,9 @@ def lambda_handler(event, context):
         
     except json.JSONDecodeError as e:
         return error_response(400, f'Invalid JSON: {str(e)}')
-    
+
     except Exception as e:
-        print(f"✗ Error: {str(e)}")
+        logging.exception('Error in lambda_handler')
         return error_response(500, f'Internal error: {str(e)}')
 
 
@@ -103,7 +123,7 @@ def lambda_handler_get_status(event, context):
         })
         
     except Exception as e:
-        print(f"✗ Error getting queue status: {str(e)}")
+        logging.exception('Error getting queue status')
         return error_response(500, f'Error: {str(e)}')
 
 

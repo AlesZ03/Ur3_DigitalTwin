@@ -1,10 +1,14 @@
 import json
 import boto3
-from datetime import datetime, timedelta
 import os
+import logging
+from datetime import datetime, timedelta, timezone
 
+logging.basicConfig(level=logging.INFO)
 s3 = boto3.client('s3')
-bucket_name = os.environ['S3_BUCKET_NAME']
+bucket_name = os.getenv('S3_BUCKET_NAME')
+if not bucket_name:
+    raise RuntimeError('Missing required environment variable: S3_BUCKET_NAME')
 
 def lambda_handler(event, context):
     """
@@ -12,12 +16,25 @@ def lambda_handler(event, context):
     """
     
     try:
+        # CORS preflight
+        if event.get('httpMethod') == 'OPTIONS':
+            return {
+                'statusCode': 204,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type'
+                },
+                'body': ''
+            }
+
         # Query paraméterek
         query_params = event.get('queryStringParameters', {}) or {}
         limit = int(query_params.get('limit', 50))
         date_filter = query_params.get('date', datetime.utcnow().strftime('%Y/%m/%d'))
         
-        print(f"📖 Reading logs from s3://{bucket_name}/robot-data/{date_filter}/")
+        logging.info("Reading logs from s3://%s/robot-data/%s/", bucket_name, date_filter)
         
         # S3 objektumok listázása
         prefix = f"robot-data/{date_filter}/"
@@ -38,7 +55,10 @@ def lambda_handler(event, context):
                 # Fájl tartalmának olvasása
                 file_obj = s3.get_object(Bucket=bucket_name, Key=key)
                 content = file_obj['Body'].read().decode('utf-8')
-                log_data = json.loads(content)
+                try:
+                    log_data = json.loads(content)
+                except Exception:
+                    log_data = {'data': content, 'timestamp': '', 'message_id': ''}
                 
                 # Hozzáadás a listához
                 logs.append({
@@ -51,7 +71,7 @@ def lambda_handler(event, context):
                 })
                 
             except Exception as e:
-                print(f"✗ Error reading {key}: {str(e)}")
+                logging.exception('Error reading %s', key)
                 continue
         
         # Legfrissebb előre rendezés
@@ -75,7 +95,7 @@ def lambda_handler(event, context):
         }
         
     except Exception as e:
-        print(f"✗ Error: {str(e)}")
+        logging.exception('Error in read_logs')
         return {
             'statusCode': 500,
             'headers': {

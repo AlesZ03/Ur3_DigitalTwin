@@ -19,9 +19,16 @@ export default function RobotLogsDashboard() {
     setLoading(true);
     setError(null);
 
+    // Quick safety check: ensure the API URL was configured at build time
+    if (!API_URL || API_URL.includes('your-api-id') || API_URL.includes('execute-api.region.amazonaws.com')) {
+      setLoading(false);
+      setError('Frontend not configured: please set REACT_APP_API_URL in .env.production or Amplify env vars and rebuild.');
+      return;
+    }
+
     try {
       const dateParam = date.replace(/-/g, '/');
-      const response = await fetch(`${API_URL}?date=${dateParam}&limit=50`);
+      const response = await fetch(`${API_URL}?date=${dateParam}&limit=500`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -70,6 +77,12 @@ export default function RobotLogsDashboard() {
   const sendCommand = async (command) => {
     setSending(true);
     setCommandStatus(null);
+
+    if (!COMMAND_API_URL || COMMAND_API_URL.includes('your-api-id') || COMMAND_API_URL.includes('execute-api.region.amazonaws.com')) {
+      setCommandStatus({ type: 'error', message: 'Frontend not configured: set REACT_APP_COMMAND_API_URL and rebuild.' });
+      setSending(false);
+      return;
+    }
 
     try {
       const response = await fetch(COMMAND_API_URL, {

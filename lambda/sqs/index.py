@@ -1,11 +1,15 @@
 import json
 import boto3
 import os
-from datetime import datetime
+import logging
+from datetime import datetime, timezone
 import uuid
 
+logging.basicConfig(level=logging.INFO)
 s3_client = boto3.client('s3')
-bucket_name = os.environ['S3_BUCKET_NAME']
+bucket_name = os.getenv('S3_BUCKET_NAME')
+if not bucket_name:
+    raise RuntimeError('Missing required environment variable: S3_BUCKET_NAME')
 
 def handler(event, context):
     """
@@ -23,7 +27,7 @@ def handler(event, context):
             message_id = record['messageId']
             
             # Timestamp és egyedi azonosító generálása
-            timestamp = datetime.utcnow().strftime('%Y-%m-%d_%H-%M-%S')
+            timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d_%H-%M-%S')
             unique_id = str(uuid.uuid4())[:8]
             
             # S3 objektum kulcs generálása (mappa struktúra dátum alapján)
@@ -34,7 +38,7 @@ def handler(event, context):
             data_to_store = {
                 'message_id': message_id,
                 'timestamp': timestamp,
-                'received_at': datetime.utcnow().isoformat(),
+                'received_at': datetime.now(timezone.utc).isoformat(),
                 'data': json.loads(message_body) if is_json(message_body) else message_body
             }
             
@@ -47,12 +51,11 @@ def handler(event, context):
             )
             
             processed_count += 1
-            print(f"✓ Sikeres mentés: {s3_key}")
+            logging.info('Saved to S3: %s', s3_key)
             
         except Exception as e:
             failed_count += 1
-            print(f"✗ Hiba az üzenet feldolgozása során: {str(e)}")
-            print(f"  Üzenet ID: {record.get('messageId', 'N/A')}")
+            logging.exception('Error processing record %s', record.get('messageId', 'N/A'))
             # A hiba nem stoppolja a többi üzenet feldolgozását
     
     # Válasz generálása
@@ -65,7 +68,7 @@ def handler(event, context):
         })
     }
     
-    print(f"Feldolgozás kész: {processed_count} sikeres, {failed_count} sikertelen")
+    logging.info('Processing finished: %s processed, %s failed', processed_count, failed_count)
     
     return response
 

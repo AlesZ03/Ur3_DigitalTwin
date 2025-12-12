@@ -924,58 +924,56 @@ resource "aws_iam_role_policy_attachment" "amplify_backend" {
   role       = aws_iam_role.amplify_role.name
 }
 
-# Amplify App
-module "amplify_logs_dashboard" {
-  source = "./modules/amplify"
-
-  app_name    = "${var.project_name}-logs-dashboard"
-  branch_name = var.amplify_branch_name
-  framework   = "React"
-  stage       = "PRODUCTION"
-
-  repository_url = var.github_repo_url
-
-  environment_variables = {
-    REACT_APP_API_URL         = module.logs_api.api_url
-    REACT_APP_COMMAND_API_URL = module.logs_api.command_api_url
-    REACT_APP_AWS_REGION      = var.aws_region
-  }
-
-  branch_environment_variables = {
-    REACT_APP_API_URL         = module.logs_api.api_url
-    REACT_APP_COMMAND_API_URL = module.logs_api.command_api_url
-  }
-
+# GitHub connection (optional: only if github_personal_access_token is provided)
+resource "aws_amplify_app" "github_connected" {
+  name       = "${var.project_name}-logs-dashboard"
+  repository = "https://github.com/${var.github_repo_owner}/${var.github_repo_name}"
+  access_token = var.github_personal_access_token
+  platform = "WEB"
+  
   build_spec = <<-EOT
     version: 1
     frontend:
       phases:
         preBuild:
           commands:
-            - npm ci
+            - npm install --prefix frontend
         build:
           commands:
-            - npm run build
+            - npm run build --prefix frontend
       artifacts:
-        baseDirectory: build
+        baseDirectory: frontend/build
         files:
           - '**/*'
       cache:
         paths:
-          - node_modules/**/*
+          - frontend/node_modules/**/*
   EOT
 
-  custom_rules = [
-    {
-      source = "/<*>"
-      status = "404"
-      target = "/index.html"
-    }
-  ]
+  custom_rule {
+    source = "^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json)$)([^.]+$)"
+    status = "200"
+    target = "/index.html"
+  }
 
   iam_service_role_arn = aws_iam_role.amplify_role.arn
 
   tags = var.common_tags
+}
+
+# GitHub branch (if GitHub token provided)
+resource "aws_amplify_branch" "github_main" {
+  app_id      = aws_amplify_app.github_connected.id
+  branch_name = var.amplify_branch_name
+
+  environment_variables = {
+    REACT_APP_API_URL         = module.logs_api.api_url
+    REACT_APP_COMMAND_API_URL = module.logs_api.command_api_url
+  }
+
+  enable_auto_build = true
+  framework         = "React"
+  stage             = "PRODUCTION"
 }
 
 # Outputs
@@ -989,11 +987,11 @@ output "api_command_url" {
   value       = module.logs_api.command_api_url
 }
 
-output "amplify_dashboard_url" {
-  description = "Amplify Dashboard URL"
-  value       = module.amplify_logs_dashboard.app_url
+output "amplify_app_url" {
+  description = "Amplify hosted frontend URL"
+  value       = "https://${var.amplify_branch_name}.${aws_amplify_app.github_connected.default_domain}"
+  sensitive   = true
 }
-
 
 # Debug outputs
 output "debug_info" {

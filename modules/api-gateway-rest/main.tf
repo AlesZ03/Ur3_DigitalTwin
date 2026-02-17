@@ -202,7 +202,7 @@ resource "aws_lambda_permission" "api_gateway" {
   action        = "lambda:InvokeFunction"
   function_name = var.lambda_function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*"
+  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/${aws_api_gateway_method.get_logs.http_method}${aws_api_gateway_resource.logs.path}"
 }
 
 # Lambda permission for command endpoint
@@ -211,5 +211,5 @@ resource "aws_lambda_permission" "api_gateway_command" {
   action        = "lambda:InvokeFunction"
   function_name = var.command_lambda_function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*"
+  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/${aws_api_gateway_method.post_command.http_method}${aws_api_gateway_resource.command.path}"
 }

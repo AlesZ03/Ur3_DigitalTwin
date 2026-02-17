@@ -12,6 +12,10 @@ terraform {
       source  = "hashicorp/time"
       version = "~> 0.7"
     }
+    local = {
+      source  = "hashicorp/local"
+      version = "~> 2.4"
+    }
   }
 }
 
@@ -20,6 +24,8 @@ provider "aws" {
 }
 
 data "aws_caller_identity" "current" {}
+
+data "aws_iot_endpoint" "current" {}
 
 # Local values - a tetején definiálva
 locals {
@@ -300,6 +306,81 @@ resource "aws_iam_role_policy" "lambda_twinmaker_policy" {
   })
 }
 
+# IAM policy for WebSocket API access (for real-time data) - EZ A HIÁNYZÓ LÁNCSZEM
+resource "aws_iam_role_policy" "lambda_websocket_policy" {
+  name = "LambdaRealtimeDataPolicy"
+  role = aws_iam_role.lambda_execution_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid      = "AllowWebSocketPublish",
+        Effect   = "Allow",
+        Action   = "execute-api:ManageConnections",
+        Resource = "arn:aws:execute-api:${var.aws_region}:${data.aws_caller_identity.current.account_id}:${module.websocket_api.websocket_api_id}/*"
+      }
+    ]
+  })
+}
+
+# Policy for S3 read access (for the /logs API endpoint)
+resource "aws_iam_role_policy" "lambda_s3_read_policy" {
+  name = "LambdaAPIS3ReadPolicy"
+  role = aws_iam_role.lambda_execution_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          module.s3_robot_data.bucket_arn,
+          "${module.s3_robot_data.bucket_arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# Policy for SQS send access (for the /command API endpoint)
+resource "aws_iam_role_policy" "lambda_sqs_send_policy" {
+  name = "LambdaAPISQSSendPolicy"
+  role = aws_iam_role.lambda_execution_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "sqs:SendMessage"
+        Resource = module.cloud_to_device_queue.queue_arn
+      }
+    ]
+  })
+}
+
+# Policy for DynamoDB access for WebSocket connection management
+resource "aws_iam_role_policy" "lambda_dynamodb_ws_policy" {
+  name = "LambdaDynamoDBWebSocketPolicy"
+  role = aws_iam_role.lambda_execution_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = ["dynamodb:PutItem", "dynamodb:DeleteItem", "dynamodb:Scan"],
+        Resource = aws_dynamodb_table.websocket_connections.arn
+      }
+    ]
+  })
+}
+
 # Lambda ZIP fájl
 data "archive_file" "lambda_zip" {
   type        = "zip"
@@ -313,17 +394,20 @@ data "archive_file" "lambda_zip" {
 # Lambda Function
 resource "aws_lambda_function" "ur3_data_processor" {
   filename         = data.archive_file.lambda_zip.output_path
-  function_name    = "ur3-data-processor-${random_string.bucket_suffix.result}"
+  function_name    = "ur3-data-processor"
   role             = aws_iam_role.lambda_execution_role.arn
   handler          = "lambda_function.lambda_handler"
   runtime          = "python3.9"
   timeout          = 30
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
 
   environment {
     variables = {
       WORKSPACE_ID = local.workspace_id
       ENTITY_ID    = local.entity_id
       S3_BUCKET    = aws_s3_bucket.ur3_scene_bucket.bucket
+      WEBSOCKET_API_ENDPOINT = replace(module.websocket_api.websocket_api_invoke_url, "wss://", "https://")
+      DYNAMODB_TABLE_NAME    = aws_dynamodb_table.websocket_connections.name
     }
   }
 
@@ -382,6 +466,40 @@ resource "aws_iot_policy" "ur3_robot_policy" {
       }
     ]
   })
+}
+
+# IoT Certificate létrehozása és mentése
+resource "aws_iot_certificate" "ur3_robot_cert" {
+  active = true
+}
+
+# A policy csatolása a tanúsítványhoz
+resource "aws_iot_policy_attachment" "ur3_robot_cert_attach_policy" {
+  policy = aws_iot_policy.ur3_robot_policy.name
+  target = aws_iot_certificate.ur3_robot_cert.arn
+}
+
+# A tanúsítvány (principal) csatolása a Thing-hez
+resource "aws_iot_thing_principal_attachment" "ur3_robot_cert_attach_thing" {
+  principal = aws_iot_certificate.ur3_robot_cert.arn
+  thing     = aws_iot_thing.ur3_robot_thing.name
+}
+
+# A tanúsítvány és a kulcsok mentése a helyi 'certs' mappába
+resource "local_file" "device_cert" {
+  content  = aws_iot_certificate.ur3_robot_cert.certificate_pem
+  filename = "${path.module}/certs/device.pem.crt"
+}
+
+resource "local_file" "device_private_key" {
+  # A privát kulcs érzékeny adat, így nem jelenik meg a plan/apply kimenetben
+  sensitive_content = aws_iot_certificate.ur3_robot_cert.private_key
+  filename          = "${path.module}/certs/private.pem.key"
+}
+
+resource "local_file" "device_public_key" {
+  content  = aws_iot_certificate.ur3_robot_cert.public_key
+  filename = "${path.module}/certs/public.pem.key"
 }
 
 # IoT Rules
@@ -470,24 +588,6 @@ resource "null_resource" "twinmaker_setup" {
     EOT
   }
 }
-########################################################################################################################
-#                                     lambda backend                                                              #
-########################################################################################################################
-
-module "ur_controller_lambda" {
-  source = "./modules/backend-lambda"
-
-  project_name                     = var.project_name
-  ur_rtde_layer_zip_path           = var.ur_rtde_layer_zip_path
-  ur_controller_lambda_source_path = var.ur_controller_lambda_source_path
-  cloud_to_device_queue_arn        = module.cloud_to_device_queue.queue_arn
-  cloud_to_device_queue_url        = module.cloud_to_device_queue.queue_url
-  common_tags                      = var.common_tags
-}
-
-
-
-
 ########################################################################################################################
 #                                     SQS-terraform conf                                                               #
 ########################################################################################################################
@@ -741,93 +841,6 @@ resource "aws_sns_topic_subscription" "alert_email" {
   protocol  = "email"
   endpoint  = var.alert_email
 }
-resource "aws_iam_role" "s3_read_lambda_role" {
-  name = "${var.project_name}-s3-read-lambda-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "lambda.amazonaws.com"
-      }
-    }]
-  })
-
-  tags = var.common_tags
-}
-
-resource "aws_iam_role_policy_attachment" "s3_read_lambda_basic" {
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-  role       = aws_iam_role.s3_read_lambda_role.name
-}
-
-resource "aws_iam_role_policy" "s3_read_lambda_policy" {
-  name = "${var.project_name}-s3-read-policy"
-  role = aws_iam_role.s3_read_lambda_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:ListBucket",
-          "s3:GetBucketLocation"
-        ]
-        Resource = [
-          module.s3_robot_data.bucket_arn,
-          "${module.s3_robot_data.bucket_arn}/*"
-        ]
-      }
-    ]
-  })
-}
-
-# Lambda IAM role parancs küldéshez
-resource "aws_iam_role" "command_lambda_role" {
-  name = "${var.project_name}-command-lambda-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "lambda.amazonaws.com"
-      }
-    }]
-  })
-
-  tags = var.common_tags
-}
-
-resource "aws_iam_role_policy_attachment" "command_lambda_basic" {
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-  role       = aws_iam_role.command_lambda_role.name
-}
-
-resource "aws_iam_role_policy" "command_lambda_policy" {
-  name = "${var.project_name}-command-sqs-policy"
-  role = aws_iam_role.command_lambda_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "sqs:SendMessage",
-          "sqs:GetQueueAttributes",
-          "sqs:GetQueueUrl"
-        ]
-        Resource = module.cloud_to_device_queue.queue_arn
-      }
-    ]
-  })
-}
 
 # Lambda ZIP fájlok
 data "archive_file" "s3_read_lambda" {
@@ -852,7 +865,7 @@ data "archive_file" "command_lambda" {
 resource "aws_lambda_function" "s3_read_logs" {
   filename         = data.archive_file.s3_read_lambda.output_path
   function_name    = "${var.project_name}-read-logs"
-  role            = aws_iam_role.s3_read_lambda_role.arn
+  role             = aws_iam_role.lambda_execution_role.arn # <-- EGYSÉGESÍTETT SZEREPKÖR HASZNÁLATA
   handler         = "index.lambda_handler"
   runtime         = "python3.11"
   timeout         = 30
@@ -878,7 +891,7 @@ resource "aws_cloudwatch_log_group" "s3_read_logs_lambda" {
 resource "aws_lambda_function" "send_command" {
   filename         = data.archive_file.command_lambda.output_path
   function_name    = "${var.project_name}-send-command"
-  role            = aws_iam_role.command_lambda_role.arn
+  role             = aws_iam_role.lambda_execution_role.arn # <-- EGYSÉGESÍTETT SZEREPKÖR HASZNÁLATA
   handler         = "index.lambda_handler"
   runtime         = "python3.11"
   timeout         = 30
@@ -895,6 +908,221 @@ resource "aws_lambda_function" "send_command" {
 
 resource "aws_cloudwatch_log_group" "send_command_lambda" {
   name              = "/aws/lambda/${aws_lambda_function.send_command.function_name}"
+  retention_in_days = 7
+
+  tags = var.common_tags
+}
+
+# ######################################################################################################################
+# #                                     WebSocket API and Handlers                                                       #
+# ######################################################################################################################
+
+# DynamoDB table to store WebSocket connection IDs
+resource "aws_dynamodb_table" "websocket_connections" {
+  name           = var.websocket_dynamodb_table
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "connectionId"
+
+  attribute {
+    name = "connectionId"
+    type = "S"
+  }
+
+  tags = var.common_tags
+}
+
+# ZIP file for the connect handler
+data "archive_file" "ws_connect_lambda" {
+  type        = "zip"
+  output_path = "${path.module}/lambda-dist/ws-connect.zip"
+  source {
+    content  = file("${path.module}/lambda/ws/connect.py")
+    filename = "index.py"
+  }
+}
+
+# ZIP file for the disconnect handler
+data "archive_file" "ws_disconnect_lambda" {
+  type        = "zip"
+  output_path = "${path.module}/lambda-dist/ws-disconnect.zip"
+  source {
+    content  = file("${path.module}/lambda/ws/disconnect.py")
+    filename = "index.py"
+  }
+}
+
+# ZIP file for the default handler
+data "archive_file" "ws_default_lambda" {
+  type        = "zip"
+  output_path = "${path.module}/lambda-dist/ws-default.zip"
+  source {
+    content  = file("${path.module}/lambda/ws/default.py")
+    filename = "index.py"
+  }
+}
+
+# Lambda function for WebSocket $connect
+resource "aws_lambda_function" "ws_connect" {
+  filename         = data.archive_file.ws_connect_lambda.output_path
+  function_name    = "${var.project_name}-ws-connect"
+  role             = aws_iam_role.lambda_execution_role.arn
+  handler          = "index.handler"
+  runtime          = "python3.11"
+  source_code_hash = data.archive_file.ws_connect_lambda.output_base64sha256
+
+  environment {
+    variables = {
+      DYNAMODB_TABLE_NAME = aws_dynamodb_table.websocket_connections.name
+    }
+  }
+  tags = var.common_tags
+}
+
+# Lambda function for WebSocket $disconnect
+resource "aws_lambda_function" "ws_disconnect" {
+  filename         = data.archive_file.ws_disconnect_lambda.output_path
+  function_name    = "${var.project_name}-ws-disconnect"
+  role             = aws_iam_role.lambda_execution_role.arn
+  handler          = "index.handler"
+  runtime          = "python3.11"
+  source_code_hash = data.archive_file.ws_disconnect_lambda.output_base64sha256
+
+  environment {
+    variables = {
+      DYNAMODB_TABLE_NAME = aws_dynamodb_table.websocket_connections.name
+    }
+  }
+  tags = var.common_tags
+}
+
+# Lambda function for WebSocket $default
+resource "aws_lambda_function" "ws_default" {
+  filename         = data.archive_file.ws_default_lambda.output_path
+  function_name    = "${var.project_name}-ws-default"
+  role             = aws_iam_role.lambda_execution_role.arn
+  handler          = "index.handler"
+  runtime          = "python3.11"
+  source_code_hash = data.archive_file.ws_default_lambda.output_base64sha256
+
+  tags = var.common_tags
+}
+
+# WebSocket API Gateway
+module "websocket_api" {
+  source = "./modules/api-gateway-websocket"
+
+  api_name = "${var.project_name}-realtime-api"
+  aws_region = var.aws_region
+
+  connect_lambda_invoke_arn    = aws_lambda_function.ws_connect.invoke_arn
+  connect_lambda_function_name = aws_lambda_function.ws_connect.function_name
+  disconnect_lambda_invoke_arn = aws_lambda_function.ws_disconnect.invoke_arn
+  disconnect_lambda_function_name = aws_lambda_function.ws_disconnect.function_name
+  default_lambda_invoke_arn    = aws_lambda_function.ws_default.invoke_arn
+  default_lambda_function_name = aws_lambda_function.ws_default.function_name
+
+  depends_on = [
+    aws_lambda_function.ws_connect,
+    aws_lambda_function.ws_disconnect,
+    aws_lambda_function.ws_default
+  ]
+
+  tags = var.common_tags
+}
+
+# ######################################################################################################################
+# #                                     UR RTDE Controller Lambda with Layer                                             #
+# ######################################################################################################################
+
+# Lambda Layer for ur-rtde library
+resource "aws_lambda_layer_version" "ur_rtde_layer" {
+  filename            = var.ur_rtde_layer_zip_path
+  layer_name          = "ur-rtde-library"
+  compatible_runtimes = ["python3.10"]
+  description         = "Lambda Layer containing the ur-rtde Python library"
+}
+
+# ZIP file for the UR controller Lambda
+data "archive_file" "ur_controller_lambda" {
+  type        = "zip"
+  output_path = "${path.module}/lambda-dist/ur-controller.zip"
+  source {
+    content  = file(var.ur_controller_lambda_source_path)
+    filename = "index.py" # Assuming the handler is index.handler
+  }
+}
+
+# IAM role for the UR controller Lambda
+resource "aws_iam_role" "ur_controller_lambda_role" {
+  name = "${var.project_name}-ur-controller-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+
+  tags = var.common_tags
+}
+
+# Basic execution policy for the controller Lambda
+resource "aws_iam_role_policy_attachment" "ur_controller_lambda_basic" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  role       = aws_iam_role.ur_controller_lambda_role.name
+}
+
+# Example policy: Allow sending commands to the SQS queue
+# You might need to add other permissions, e.g., for VPC access if you need direct network communication
+resource "aws_iam_role_policy" "ur_controller_lambda_policy" {
+  name = "${var.project_name}-ur-controller-sqs-policy"
+  role = aws_iam_role.ur_controller_lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:GetQueueUrl"
+        ]
+        Resource = module.cloud_to_device_queue.queue_arn
+      }
+    ]
+  })
+}
+
+# Lambda function for UR Robot Controller
+resource "aws_lambda_function" "ur_control_lambda" {
+  filename         = data.archive_file.ur_controller_lambda.output_path
+  function_name    = "${var.project_name}-ur-robot-controller"
+  role             = aws_iam_role.ur_controller_lambda_role.arn
+  handler          = "index.handler"
+  runtime          = "python3.10"
+  timeout          = 60 # Increased timeout might be needed for robot communication
+  source_code_hash = data.archive_file.ur_controller_lambda.output_base64sha256
+
+  layers = [aws_lambda_layer_version.ur_rtde_layer.arn]
+
+  environment {
+    variables = {
+      COMMAND_QUEUE_URL = module.cloud_to_device_queue.queue_url
+      # Add other necessary environment variables here
+    }
+  }
+
+  tags = var.common_tags
+}
+
+# CloudWatch Log Group for the controller Lambda
+resource "aws_cloudwatch_log_group" "ur_control_lambda" {
+  name              = "/aws/lambda/${aws_lambda_function.ur_control_lambda.function_name}"
   retention_in_days = 7
 
   tags = var.common_tags
@@ -987,6 +1215,7 @@ resource "aws_amplify_branch" "github_main" {
   environment_variables = {
     REACT_APP_API_URL         = module.logs_api.api_url
     REACT_APP_COMMAND_API_URL = module.logs_api.command_api_url
+    REACT_APP_WEBSOCKET_URL   = module.websocket_api.websocket_api_invoke_url
   }
 
   enable_auto_build = true
@@ -994,22 +1223,6 @@ resource "aws_amplify_branch" "github_main" {
   stage             = "PRODUCTION"
 }
 
-# Outputs
-output "api_logs_url" {
-  description = "REST API URL a logok lekéréséhez"
-  value       = module.logs_api.api_url
-}
-
-output "api_command_url" {
-  description = "REST API URL parancsok küldéséhez"
-  value       = module.logs_api.command_api_url
-}
-
-output "amplify_app_url" {
-  description = "Amplify hosted frontend URL"
-  value       = "https://${var.amplify_branch_name}.${aws_amplify_app.github_connected.default_domain}"
-  sensitive   = true
-}
 
 # Debug outputs
 output "debug_info" {
@@ -1040,3 +1253,8 @@ output "twinmaker_workspace_direct_url" {
 # output "lambda_function_name" {
 #   value = aws_lambda_function.ur3_data_processor.function_name
 #}
+
+output "iot_endpoint" {
+  description = "The endpoint for the AWS IoT Core service. Copy this to your core-test.py and ur-rtde.py scripts."
+  value       = data.aws_iot_endpoint.current.endpoint_address
+}

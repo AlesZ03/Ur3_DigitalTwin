@@ -12,7 +12,8 @@ from rtde_control import RTDEControlInterface as RTDEControl
 from rtde_receive import RTDEReceiveInterface as RTDEReceive
 
 # --- Konfiguráció ---
-ROBOT_IP = "192.168.98.6"  
+#ROBOT_IP = "192.168.98.6"  
+ROBOT_IP = "172.17.0.2" 
 AWS_REGION = 'us-east-1'
 
 # SQS Sorok 

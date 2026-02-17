@@ -136,3 +136,6 @@ gunicorn.pid
 run/
 logs/
 tmp/
+
+
+UR3_DigitalTwin_deploy

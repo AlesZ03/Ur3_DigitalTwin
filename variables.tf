@@ -29,19 +29,11 @@ variable "project_name" {
   default     = "ur3-digital-twin"
 }
 
-
-
-
-
 variable "alert_email" {
   type        = string
   default     = "balazsvajk2003@gmail.com"
   description = "Email cím riasztásokhoz (opcionális)"
 }
-
-
-
-
 
 # S3 változók
 variable "s3_bucket_name" {
@@ -129,11 +121,23 @@ variable "lambda_log_retention_days" {
   default     = 7
 }
 
+variable "ur_rtde_layer_zip_path" {
+  description = "A `ur-rtde` library-t tartalmazó Lambda Layer ZIP fájl elérési útja."
+  type        = string
+  default     = "lambda/layers/ur-rtde-layer.zip"
+}
+
+variable "ur_controller_lambda_source_path" {
+  description = "A robotot vezérlő Lambda forráskódjának elérési útja."
+  type        = string
+  default     = "lambda/backend/controller.py"
+}
+
 # SQS ARN (a meglévő SQS modulból jön)
 variable "sqs_queue_arn" {
   description = "Az SQS queue ARN-je"
   type        = string
-   default     = "" 
+  default     = ""
 }
 
 # Közös tagek
@@ -146,7 +150,6 @@ variable "common_tags" {
     ManagedBy   = "terraform"
   }
 }
-
 
 # Amplify változók
 variable "github_repo_url" {
@@ -179,4 +182,10 @@ variable "github_personal_access_token" {
   type        = string
   sensitive   = true
 
+}
+
+variable "websocket_dynamodb_table" {
+  description = "Name for the DynamoDB table storing WebSocket connections."
+  type        = string
+  default     = "robot-websocket-connections"
 }

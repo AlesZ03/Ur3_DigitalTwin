@@ -471,6 +471,24 @@ resource "null_resource" "twinmaker_setup" {
   }
 }
 ########################################################################################################################
+#                                     lambda backend                                                              #
+########################################################################################################################
+
+module "ur_controller_lambda" {
+  source = "./modules/backend-lambda"
+
+  project_name                     = var.project_name
+  ur_rtde_layer_zip_path           = var.ur_rtde_layer_zip_path
+  ur_controller_lambda_source_path = var.ur_controller_lambda_source_path
+  cloud_to_device_queue_arn        = module.cloud_to_device_queue.queue_arn
+  cloud_to_device_queue_url        = module.cloud_to_device_queue.queue_url
+  common_tags                      = var.common_tags
+}
+
+
+
+
+########################################################################################################################
 #                                     SQS-terraform conf                                                               #
 ########################################################################################################################
 
@@ -1022,8 +1040,3 @@ output "twinmaker_workspace_direct_url" {
 # output "lambda_function_name" {
 #   value = aws_lambda_function.ur3_data_processor.function_name
 #}
-
-
-
-
-

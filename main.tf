@@ -1030,6 +1030,21 @@ module "websocket_api" {
   tags = var.common_tags
 }
 
+# DynamoDB table to store the twin's operational mode (CONNECTED vs SIMULATED)
+resource "aws_dynamodb_table" "twin_state" {
+  name           = "${var.project_name}-twin-state"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "entityId"
+
+  attribute {
+    name = "entityId"
+    type = "S"
+  }
+
+  tags = var.common_tags
+}
+
+
 # ######################################################################################################################
 # #                                     UR RTDE Controller Lambda with Layer                                             #
 # ######################################################################################################################

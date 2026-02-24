@@ -81,11 +81,13 @@ output "lambda_log_group_name" {
 output "api_logs_url" {
   description = "REST API URL a logok lekéréséhez"
   value       = module.logs_api.api_url
+  value       = "${aws_api_gateway_stage.ur3_api_stage.invoke_url}/logs"
 }
 
 output "api_command_url" {
   description = "REST API URL parancsok küldéséhez"
   value       = module.logs_api.command_api_url
+  value       = "${aws_api_gateway_stage.ur3_api_stage.invoke_url}/command"
 }
 
 output "amplify_app_url" {

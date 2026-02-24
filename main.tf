@@ -869,6 +869,7 @@ resource "aws_lambda_function" "s3_read_logs" {
   handler         = "index.lambda_handler"
   runtime         = "python3.11"
   timeout         = 30
+  memory_size     = 512
   source_code_hash = data.archive_file.s3_read_lambda.output_base64sha256
 
   environment {
@@ -1146,6 +1147,9 @@ resource "aws_cloudwatch_log_group" "ur_control_lambda" {
 # API Gateway REST API
 module "logs_api" {
   source = "./modules/api-gateway-rest"
+######################################################################################################################
+#                                     API Gateway (REST API)                                                         #
+######################################################################################################################
 
   api_name             = "${var.project_name}-logs-api"
   api_description      = "REST API for reading robot logs from S3 and sending commands"
@@ -1159,7 +1163,120 @@ module "logs_api" {
   command_lambda_invoke_arn    = aws_lambda_function.send_command.invoke_arn
   command_lambda_function_name = aws_lambda_function.send_command.function_name
 
+# --- API Gateway REST API ---
+resource "aws_api_gateway_rest_api" "ur3_api" {
+  name        = "${var.project_name}-api"
+  description = "REST API for UR3 Digital Twin"
+  endpoint_configuration {
+    types = ["REGIONAL"]
+  }
   tags = var.common_tags
+}
+
+# --- /logs endpoint ---
+resource "aws_api_gateway_resource" "logs_resource" {
+  rest_api_id = aws_api_gateway_rest_api.ur3_api.id
+  parent_id   = aws_api_gateway_rest_api.ur3_api.root_resource_id
+  path_part   = "logs"
+}
+
+resource "aws_api_gateway_method" "logs_get_method" {
+  rest_api_id   = aws_api_gateway_rest_api.ur3_api.id
+  resource_id   = aws_api_gateway_resource.logs_resource.id
+  http_method   = "GET"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "logs_get_integration" {
+  rest_api_id             = aws_api_gateway_rest_api.ur3_api.id
+  resource_id             = aws_api_gateway_resource.logs_resource.id
+  http_method             = aws_api_gateway_method.logs_get_method.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.s3_read_logs.invoke_arn
+}
+
+# --- /command endpoint ---
+resource "aws_api_gateway_resource" "command_resource" {
+  rest_api_id = aws_api_gateway_rest_api.ur3_api.id
+  parent_id   = aws_api_gateway_rest_api.ur3_api.root_resource_id
+  path_part   = "command"
+}
+
+# POST /command
+resource "aws_api_gateway_method" "command_post_method" {
+  rest_api_id   = aws_api_gateway_rest_api.ur3_api.id
+  resource_id   = aws_api_gateway_resource.command_resource.id
+  http_method   = "POST"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "command_post_integration" {
+  rest_api_id             = aws_api_gateway_rest_api.ur3_api.id
+  resource_id             = aws_api_gateway_resource.command_resource.id
+  http_method             = aws_api_gateway_method.command_post_method.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.send_command.invoke_arn
+}
+
+# --- /command/quick endpoint ---
+resource "aws_api_gateway_resource" "command_quick_resource" {
+  rest_api_id = aws_api_gateway_rest_api.ur3_api.id
+  parent_id   = aws_api_gateway_resource.command_resource.id
+  path_part   = "quick"
+}
+
+resource "aws_api_gateway_method" "command_quick_get_method" {
+  rest_api_id   = aws_api_gateway_rest_api.ur3_api.id
+  resource_id   = aws_api_gateway_resource.command_quick_resource.id
+  http_method   = "GET"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "command_quick_get_integration" {
+  rest_api_id             = aws_api_gateway_rest_api.ur3_api.id
+  resource_id             = aws_api_gateway_resource.command_quick_resource.id
+  http_method             = aws_api_gateway_method.command_quick_get_method.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.send_command.invoke_arn
+}
+
+# --- API Deployment and Stage ---
+resource "aws_api_gateway_deployment" "ur3_api_deployment" {
+  rest_api_id = aws_api_gateway_rest_api.ur3_api.id
+
+  triggers = {
+    redeployment = sha1(jsonencode(values(aws_api_gateway_integration.command_quick_get_integration)))
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_api_gateway_stage" "ur3_api_stage" {
+  deployment_id = aws_api_gateway_deployment.ur3_api_deployment.id
+  rest_api_id   = aws_api_gateway_rest_api.ur3_api.id
+  stage_name    = "prod"
+}
+
+# --- Lambda Permissions for API Gateway ---
+resource "aws_lambda_permission" "allow_api_gateway_read_logs" {
+  statement_id  = "AllowAPIGatewayInvokeReadLogs"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.s3_read_logs.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.ur3_api.execution_arn}/*/*"
+}
+
+resource "aws_lambda_permission" "allow_api_gateway_send_command" {
+  statement_id  = "AllowAPIGatewayInvokeSendCommand"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.send_command.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.ur3_api.execution_arn}/*/*"
 }
 
 # Amplify IAM role
@@ -1230,6 +1347,8 @@ resource "aws_amplify_branch" "github_main" {
   environment_variables = {
     REACT_APP_API_URL         = module.logs_api.api_url
     REACT_APP_COMMAND_API_URL = module.logs_api.command_api_url
+    REACT_APP_API_URL         = "${aws_api_gateway_stage.ur3_api_stage.invoke_url}/logs"
+    REACT_APP_COMMAND_API_URL = "${aws_api_gateway_stage.ur3_api_stage.invoke_url}/command"
     REACT_APP_WEBSOCKET_URL   = module.websocket_api.websocket_api_invoke_url
   }
 

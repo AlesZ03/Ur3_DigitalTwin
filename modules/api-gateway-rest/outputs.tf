@@ -20,6 +20,11 @@ output "command_api_url" {
   value       = "${aws_api_gateway_stage.stage.invoke_url}/command"
 }
 
+output "command_quick_api_url" {
+  description = "Teljes API URL a command/quick endpoint-tal"
+  value       = "${aws_api_gateway_stage.stage.invoke_url}/command/quick"
+}
+
 output "execution_arn" {
   description = "API Gateway execution ARN"
   value       = aws_api_gateway_rest_api.api.execution_arn

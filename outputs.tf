@@ -80,14 +80,17 @@ output "lambda_log_group_name" {
 
 output "api_logs_url" {
   description = "REST API URL a logok lekéréséhez"
-  value       = module.logs_api.api_url
-  value       = "${aws_api_gateway_stage.ur3_api_stage.invoke_url}/logs"
+  value       = module.ur3_api_gateway.api_url
 }
 
 output "api_command_url" {
   description = "REST API URL parancsok küldéséhez"
-  value       = module.logs_api.command_api_url
-  value       = "${aws_api_gateway_stage.ur3_api_stage.invoke_url}/command"
+  value       = module.ur3_api_gateway.command_api_url
+}
+
+output "api_command_quick_url" {
+  description = "REST API URL a gyorsparancsok lekéréséhez"
+  value       = module.ur3_api_gateway.command_quick_api_url
 }
 
 output "amplify_app_url" {
@@ -95,6 +98,3 @@ output "amplify_app_url" {
   value       = "https://${var.amplify_branch_name}.${aws_amplify_app.github_connected.default_domain}"
   sensitive   = true
 }
-
-
-

@@ -160,6 +160,80 @@ resource "aws_api_gateway_integration_response" "options_command" {
   }
 }
 
+# --- /command/quick endpoint ---
+resource "aws_api_gateway_resource" "command_quick" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  parent_id   = aws_api_gateway_resource.command.id
+  path_part   = "quick"
+}
+
+# GET /command/quick method
+resource "aws_api_gateway_method" "get_command_quick" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.command_quick.id
+  http_method   = "GET"
+  authorization = "NONE"
+}
+
+# Lambda integration for GET /command/quick
+resource "aws_api_gateway_integration" "get_command_quick_lambda" {
+  rest_api_id             = aws_api_gateway_rest_api.api.id
+  resource_id             = aws_api_gateway_resource.command_quick.id
+  http_method             = aws_api_gateway_method.get_command_quick.http_method
+  integration_http_method = "POST" # Lambda proxy integration always uses POST
+  type                    = "AWS_PROXY"
+  uri                     = var.command_lambda_invoke_arn
+}
+
+# OPTIONS /command/quick for CORS
+resource "aws_api_gateway_method" "options_command_quick" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.command_quick.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_command_quick" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.command_quick.id
+  http_method = aws_api_gateway_method.options_command_quick.http_method
+  type        = "MOCK"
+
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
+  }
+}
+
+resource "aws_api_gateway_method_response" "options_command_quick_200" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.command_quick.id
+  http_method = aws_api_gateway_method.options_command_quick.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+
+  response_models = {
+    "application/json" = "Empty"
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_command_quick" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.command_quick.id
+  http_method = aws_api_gateway_method.options_command_quick.http_method
+  status_code = aws_api_gateway_method_response.options_command_quick_200.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
 # Deployment
 resource "aws_api_gateway_deployment" "deployment" {
   rest_api_id = aws_api_gateway_rest_api.api.id
@@ -168,7 +242,9 @@ resource "aws_api_gateway_deployment" "deployment" {
     aws_api_gateway_integration.get_logs_lambda,
     aws_api_gateway_integration.options_logs,
     aws_api_gateway_integration.post_command_lambda,
-    aws_api_gateway_integration.options_command
+    aws_api_gateway_integration.options_command,
+    aws_api_gateway_integration.get_command_quick_lambda,
+    aws_api_gateway_integration.options_command_quick
   ]
 
   lifecycle {
@@ -176,14 +252,16 @@ resource "aws_api_gateway_deployment" "deployment" {
   }
 
   triggers = {
-    redeployment = sha1(jsonencode([
-      aws_api_gateway_resource.logs.id,
-      aws_api_gateway_method.get_logs.id,
-      aws_api_gateway_integration.get_logs_lambda.id,
-      aws_api_gateway_resource.command.id,
-      aws_api_gateway_method.post_command.id,
-      aws_api_gateway_integration.post_command_lambda.id,
-    ]))
+    redeployment = sha1(jsonencode(
+      [
+        aws_api_gateway_integration.get_logs_lambda.id,
+        aws_api_gateway_integration.options_logs.id,
+        aws_api_gateway_integration.post_command_lambda.id,
+        aws_api_gateway_integration.options_command.id,
+        aws_api_gateway_integration.get_command_quick_lambda.id,
+        aws_api_gateway_integration.options_command_quick.id,
+      ]
+    ))
   }
 }
 
@@ -196,20 +274,20 @@ resource "aws_api_gateway_stage" "stage" {
   tags = var.tags
 }
 
-# Lambda permission
-resource "aws_lambda_permission" "api_gateway" {
-  statement_id  = "AllowAPIGatewayInvoke"
+# Lambda permission for logs endpoint
+resource "aws_lambda_permission" "api_gateway_logs" {
+  statement_id  = "AllowAPIGatewayInvokeLogs"
   action        = "lambda:InvokeFunction"
-  function_name = var.lambda_function_name
+  function_name = var.lambda_function_name # This is for the logs lambda
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/${aws_api_gateway_method.get_logs.http_method}${aws_api_gateway_resource.logs.path}"
+  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*" # Allow all methods on all paths for this API
 }
 
-# Lambda permission for command endpoint
-resource "aws_lambda_permission" "api_gateway_command" {
-  statement_id  = "AllowAPIGatewayInvokeCommand"
+# Lambda permission for command endpoint (POST /command and GET /command/quick)
+resource "aws_lambda_permission" "api_gateway_command_lambda" {
+  statement_id  = "AllowAPIGatewayInvokeCommandLambda"
   action        = "lambda:InvokeFunction"
-  function_name = var.command_lambda_function_name
+  function_name = var.command_lambda_function_name # This is for the send_command lambda
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/${aws_api_gateway_method.post_command.http_method}${aws_api_gateway_resource.command.path}"
+  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*" # Allow all methods on all paths for this API
 }

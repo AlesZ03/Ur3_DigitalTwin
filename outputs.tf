@@ -9,11 +9,7 @@ output "iot_test_console_url" {
 
 
 
-# IoT Topics and Resources
-output "iot_thing_name" {
-  description = "IoT Thing name for the UR3 robot"
-  value       = aws_iot_thing.ur3_robot_thing.name
-}
+
 
 output "iot_policy_name" {
   description = "IoT Policy name for the UR3 robot"

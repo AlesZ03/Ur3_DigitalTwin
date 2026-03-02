@@ -165,6 +165,9 @@ resource "aws_iam_role_policy" "lambda_dynamodb_ws_policy" {
     ]
   })
 }
+########################################################################################################################
+#                                     IOT-Core conf                                                                    #
+########################################################################################################################
 
 module "iot_core_lambda" {
   source = "./modules/iot-core-lambda"
@@ -176,11 +179,8 @@ module "iot_core_lambda" {
   websocket_connections_dynamodb_table_name = aws_dynamodb_table.websocket_connections.name
   aws_account_id                          = data.aws_caller_identity.current.account_id
   certs_output_path                       = "${path.module}/certs"
-
-  # Opcionális: az alapértelmezett nevek felülírása, ha szükséges
-  # thing_name        = "UR3-Robot-001"
-  # telemetry_topic   = "ur3/robot/telemetry"
-  # commands_topic    = "ur3/robot/commands"
+  lambda_zip_path                         = "${path.module}/lambda-dist"
+         
 }
 
 
@@ -271,7 +271,8 @@ module "lambda_robot_processor" {
   source = "./modules/lambda-sqs"
 
   function_name    = var.lambda_function_name
-  lambda_zip_path  = var.lambda_zip_path
+  lambda_source_file_path = "${path.module}/lambda/sqs/data-sqs.py"
+  lambda_output_zip_path  = "${path.module}/lambda-dist/${var.lambda_function_name}.zip"
   handler          = var.lambda_handler
   runtime          = var.lambda_runtime
   timeout          = var.lambda_timeout
@@ -762,6 +763,9 @@ module "ur3_api_gateway" {
 
   tags = var.common_tags
 }
+######################################################################################################################
+#                                     Amplify configuration                                                          #
+######################################################################################################################
 
 # Amplify IAM role
 resource "aws_iam_role" "amplify_role" {

@@ -2,6 +2,8 @@ import json
 import boto3
 import os
 import logging
+import math
+
 
 # Configure logging
 logger = logging.getLogger()
@@ -22,6 +24,25 @@ dynamodb = boto3.resource('dynamodb')
 connections_table = dynamodb.Table(DYNAMODB_TABLE_NAME)
 # The endpoint_url is crucial for the ApiGatewayManagementApi client to know where to send messages
 apigw_management_client = boto3.client('apigatewaymanagementapi', endpoint_url=WEBSOCKET_API_ENDPOINT)
+
+def apply_correction(joint_positions):
+    """
+    Elvégzi a 3D modellhez szükséges korrekciót a nyers csuklópozíciókon.
+    """
+    if not isinstance(joint_positions, list) or len(joint_positions) != 6:
+        return joint_positions # Hiba esetén visszatér a nyers adattal
+
+    # A JSX-ben lévő logika átültetve Pythonba
+    corrected_positions = [
+        joint_positions[0]+ (math.pi / 2),                      # Joint 0: Váll forgatás (pan)
+        joint_positions[1] + (math.pi / 2),      # Joint 1: Váll emelés (lift)
+        joint_positions[2],                      # Joint 2: Könyök
+        joint_positions[3] + (math.pi / 2),                     # Joint 3: Csukló 1
+        joint_positions[4] - (math.pi / 2),                      # Joint 4: Csukló 2
+        joint_positions[5]                       # Joint 5: Csukló 3
+    ]
+    return corrected_positions
+
 
 def lambda_handler(event, context):
     """
@@ -64,8 +85,9 @@ def lambda_handler(event, context):
 
     # 3. Prepare the payload to be sent to the frontend.
     # The frontend expects a JSON object with a 'joint_positions' key.
+    corrected_positions = apply_correction(joint_positions)
     payload = json.dumps({
-        'joint_positions': joint_positions
+        'joint_positions': corrected_positions
     })
     
     # 4. Broadcast the payload to all connected clients.

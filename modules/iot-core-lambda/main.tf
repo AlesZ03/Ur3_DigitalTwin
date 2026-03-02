@@ -1,10 +1,10 @@
 # Lambda ZIP fájl
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  output_path = "${path.module}/iot-core_to_ws.zip" # Ideiglenes fájl a modulon belül
+  output_path = "${var.lambda_zip_path}/iot-core_to_ws.zip" 
   source {
     content  = file(var.lambda_source_file_path)
-    filename = "lambda_function.py" # A handler `lambda_function.lambda_handler`, ezért a fájlnévnek egyeznie kell
+    filename = "lambda_function.py" 
   }
 }
 
@@ -80,32 +80,32 @@ resource "aws_iot_policy" "ur3_robot_policy" {
   })
 }
 
-# IoT Certificate létrehozása és mentése
+
 resource "aws_iot_certificate" "ur3_robot_cert" {
   active = true
 }
 
-# A policy csatolása a tanúsítványhoz
+
 resource "aws_iot_policy_attachment" "ur3_robot_cert_attach_policy" {
   policy = aws_iot_policy.ur3_robot_policy.name
   target = aws_iot_certificate.ur3_robot_cert.arn
 }
 
-# A tanúsítvány (principal) csatolása a Thing-hez
+
 resource "aws_iot_thing_principal_attachment" "ur3_robot_cert_attach_thing" {
   principal = aws_iot_certificate.ur3_robot_cert.arn
   thing     = aws_iot_thing.ur3_robot_thing.name
 }
 
-# A tanúsítvány és a kulcsok mentése a helyi 'certs' mappába
+
 resource "local_file" "device_cert" {
   content  = aws_iot_certificate.ur3_robot_cert.certificate_pem
   filename = "${var.certs_output_path}/device.pem.crt"
 }
 
-resource "local_file" "device_private_key" {
-  sensitive_content = aws_iot_certificate.ur3_robot_cert.private_key
-  filename          = "${var.certs_output_path}/private.pem.key"
+resource "local_sensitive_file" "device_private_key" {
+  content  = aws_iot_certificate.ur3_robot_cert.private_key
+  filename = "${var.certs_output_path}/private.pem.key"
 }
 
 resource "local_file" "device_public_key" {

@@ -3,8 +3,13 @@ variable "function_name" {
   type        = string
 }
 
-variable "lambda_zip_path" {
-  description = "A Lambda zip fájl elérési útja"
+variable "lambda_source_file_path" {
+  description = "A Lambda forráskód .py fájljának elérési útja."
+  type        = string
+}
+
+variable "lambda_output_zip_path" {
+  description = "A generált ZIP fájl teljes elérési útja (pl. /path/to/dist/function.zip)."
   type        = string
 }
 

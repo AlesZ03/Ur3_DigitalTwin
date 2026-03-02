@@ -14,6 +14,10 @@ variable "random_suffix" {
   description = "A random string to ensure unique resource names."
   type        = string
 }
+variable "lambda_zip_path" {
+  description = "A Lambda zip fájl elérési útja"
+  type        = string
+}
 
 variable "lambda_execution_role_arn" {
   description = "ARN of the IAM role for the Lambda function."

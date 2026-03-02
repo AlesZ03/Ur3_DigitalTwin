@@ -70,13 +70,23 @@ resource "aws_iam_role_policy" "lambda_s3_policy" {
   })
 }
 
+# ZIP fájl létrehozása a forráskódból
+data "archive_file" "lambda_zip" {
+  type = "zip"
+  source {
+    content  = file(var.lambda_source_file_path)
+    filename = "index.py" # A handler 'index.handler', ezért a fájlnévnek 'index.py'-nak kell lennie
+  }
+  output_path = var.lambda_output_zip_path
+}
+
 # Lambda függvény
 resource "aws_lambda_function" "function" {
-  filename         = var.lambda_zip_path
+  filename         = data.archive_file.lambda_zip.output_path
   function_name    = var.function_name
   role            = aws_iam_role.lambda_role.arn
   handler         = var.handler
-  source_code_hash = filebase64sha256(var.lambda_zip_path)
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   runtime         = var.runtime
   timeout         = var.timeout
   memory_size     = var.memory_size

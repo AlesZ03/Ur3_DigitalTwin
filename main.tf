@@ -166,148 +166,21 @@ resource "aws_iam_role_policy" "lambda_dynamodb_ws_policy" {
   })
 }
 
-# Lambda ZIP fájl
-data "archive_file" "lambda_zip" {
-  type        = "zip"
-  output_path = "lambda-dist/iot-core_to_ws.zip"
-  source {
-    content = file("${path.module}/lambda/iot-core/lambda_data_connector.py")
-    filename = "iotcore-ws.py"
-  }
-}
+module "iot_core_lambda" {
+  source = "./modules/iot-core-lambda"
 
-# Lambda Function
-resource "aws_lambda_function" "ur3_data_processor" {
-  filename         = data.archive_file.lambda_zip.output_path
-  function_name    = "ur3-data-processor"
-  role             = aws_iam_role.lambda_execution_role.arn
-  handler          = "lambda_function.lambda_handler"
-  runtime          = "python3.9"
-  timeout          = 30
-  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  random_suffix                           = random_string.bucket_suffix.result
+  lambda_execution_role_arn               = aws_iam_role.lambda_execution_role.arn
+  lambda_source_file_path                 = "${path.module}/lambda/iot-core/lambda_data_connector.py"
+  websocket_api_endpoint                  = module.websocket_api.websocket_api_invoke_url
+  websocket_connections_dynamodb_table_name = aws_dynamodb_table.websocket_connections.name
+  aws_account_id                          = data.aws_caller_identity.current.account_id
+  certs_output_path                       = "${path.module}/certs"
 
-  environment {
-    variables = {
-      
-      WEBSOCKET_API_ENDPOINT = replace(module.websocket_api.websocket_api_invoke_url, "wss://", "https://")
-      DYNAMODB_TABLE_NAME    = aws_dynamodb_table.websocket_connections.name
-    }
-  }
-
-  # removed depends_on = [data.archive_file.lambda_zip] because filename now references the data.source
-}
-
-# Lambda permission for IoT
-resource "aws_lambda_permission" "allow_iot" {
-  statement_id  = "AllowExecutionFromIoT"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.ur3_data_processor.function_name
-  principal     = "iot.amazonaws.com"
-  source_arn    = aws_iot_topic_rule.ur3_data_rule.arn
-}
-
-# Lambda permission for TwinMaker
-resource "aws_lambda_permission" "allow_twinmaker" {
-  statement_id  = "AllowExecutionFromTwinMaker"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.ur3_data_processor.function_name
-  principal     = "iottwinmaker.amazonaws.com"
-  source_account = data.aws_caller_identity.current.account_id
-}
-
-# IoT Thing Type
-resource "aws_iot_thing_type" "ur3_robot_thing_type" {
-  name = "UR3RobotType"
-  
-  properties {
-    description = "UR3 Robot Thing Type"
-  }
-}
-
-# IoT Thing
-resource "aws_iot_thing" "ur3_robot_thing" {
-  name           = "UR3-Robot-001"
-  thing_type_name = aws_iot_thing_type.ur3_robot_thing_type.name
-}
-
-# IoT Policy
-resource "aws_iot_policy" "ur3_robot_policy" {
-  name = "UR3RobotPolicy-${random_string.bucket_suffix.result}"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "iot:Connect",
-          "iot:Publish",
-          "iot:Subscribe",
-          "iot:Receive"
-        ]
-        Resource = ["*"]
-      }
-    ]
-  })
-}
-
-# IoT Certificate létrehozása és mentése
-resource "aws_iot_certificate" "ur3_robot_cert" {
-  active = true
-}
-
-# A policy csatolása a tanúsítványhoz
-resource "aws_iot_policy_attachment" "ur3_robot_cert_attach_policy" {
-  policy = aws_iot_policy.ur3_robot_policy.name
-  target = aws_iot_certificate.ur3_robot_cert.arn
-}
-
-# A tanúsítvány (principal) csatolása a Thing-hez
-resource "aws_iot_thing_principal_attachment" "ur3_robot_cert_attach_thing" {
-  principal = aws_iot_certificate.ur3_robot_cert.arn
-  thing     = aws_iot_thing.ur3_robot_thing.name
-}
-
-# A tanúsítvány és a kulcsok mentése a helyi 'certs' mappába
-resource "local_file" "device_cert" {
-  content  = aws_iot_certificate.ur3_robot_cert.certificate_pem
-  filename = "${path.module}/certs/device.pem.crt"
-}
-
-resource "local_file" "device_private_key" {
-  # A privát kulcs érzékeny adat, így nem jelenik meg a plan/apply kimenetben
-  sensitive_content = aws_iot_certificate.ur3_robot_cert.private_key
-  filename          = "${path.module}/certs/private.pem.key"
-}
-
-resource "local_file" "device_public_key" {
-  content  = aws_iot_certificate.ur3_robot_cert.public_key
-  filename = "${path.module}/certs/public.pem.key"
-}
-
-# IoT Rules
-resource "aws_iot_topic_rule" "ur3_data_rule" {
-  name        = "UR3DataProcessingRule${replace(random_string.bucket_suffix.result, "-", "")}"
-  description = "Process UR3 Robot telemetry data"
-  enabled     = true
-  sql         = "SELECT * FROM 'ur3/robot/telemetry'"
-  sql_version = "2016-03-23"
-
-  lambda {
-    function_arn = aws_lambda_function.ur3_data_processor.arn
-  }
-}
-
-resource "aws_iot_topic_rule" "ur3_command_rule" {
-  name        = "UR3CommandRule${replace(random_string.bucket_suffix.result, "-", "")}"
-  description = "Handle UR3 Robot commands from TwinMaker"
-  enabled     = true
-  sql         = "SELECT * FROM 'ur3/robot/commands'"
-  sql_version = "2016-03-23"
-
-  lambda {
-    function_arn = aws_lambda_function.ur3_data_processor.arn
-  }
+  # Opcionális: az alapértelmezett nevek felülírása, ha szükséges
+  # thing_name        = "UR3-Robot-001"
+  # telemetry_topic   = "ur3/robot/telemetry"
+  # commands_topic    = "ur3/robot/commands"
 }
 
 
@@ -965,11 +838,4 @@ resource "aws_amplify_branch" "github_main" {
   enable_auto_build = true
   framework         = "React"
   stage             = "PRODUCTION"
-}
-
-
-
-output "iot_endpoint" {
-  description = "The endpoint for the AWS IoT Core service. Copy this to your core-test.py and ur-rtde.py scripts."
-  value       = data.aws_iot_endpoint.current.endpoint_address
 }

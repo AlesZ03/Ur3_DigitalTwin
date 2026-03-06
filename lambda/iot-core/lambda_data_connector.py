@@ -5,11 +5,15 @@ import urllib.request
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 from botocore.session import get_session
+import boto3
 
 # Logger beállítása
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
+iot_data_client = boto3.client(
+    'iot-data', 
+    endpoint_url=f"https://{os.environ['IOT_ENDPOINT']}" 
+)
 # Környezeti változóból olvassuk az AppSync API URL-t
 APPSYNC_API_URL = os.environ.get('APPSYNC_API_URL')
 if not APPSYNC_API_URL:
@@ -74,6 +78,21 @@ def sign_and_make_request(query, variables):
         raise e
 
 def lambda_handler(event, context):
+    if "info" in event and event["info"]["fieldName"] == "getLatestShadowUpdate":
+        logger.info("AppSync Query detected: Fetching shadow from IoT Core")
+        try:
+            response = iot_data_client.get_thing_shadow(thingName="UR3-Robot-001")
+            shadow_payload = json.loads(response['payload'].read().decode('utf-8'))
+            
+            return {
+                "state": shadow_payload.get("state", {}),
+                "version": shadow_payload.get("version"),
+                "timestamp": shadow_payload.get("timestamp")
+            }
+        except Exception as e:
+            logger.error(f"Error fetching shadow: {str(e)}")
+            raise e
+        
     """A Lambda belépési pontja, amit az IoT Rule hív meg."""
     logger.info(f"Event received from IoT Rule: {json.dumps(event)}")
 

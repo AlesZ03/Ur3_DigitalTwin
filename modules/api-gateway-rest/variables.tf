@@ -17,28 +17,34 @@ variable "stage_name" {
   default     = "prod"
 }
 
-variable "lambda_invoke_arn" {
-  description = "Lambda függvény invoke ARN-je"
-  type        = string
-}
 
-variable "lambda_function_name" {
-  description = "Lambda függvény neve (logs olvasáshoz)"
-  type        = string
-}
 
-variable "command_lambda_invoke_arn" {
-  description = "Command Lambda függvény invoke ARN-je"
-  type        = string
-}
 
-variable "command_lambda_function_name" {
-  description = "Command Lambda függvény neve"
-  type        = string
-}
-
-variable "tags" {
+variable "project_name" { 
+  description = "Projekt neve"
+  type = string 
+  default     = null
+  }
+variable "tags" { 
   description = "Tagek az API Gateway erőforrásokhoz"
-  type        = map(string)
+  type = map(string) 
   default     = {}
+  }
+variable "s3_bucket_name" {
+  description = "S3 bucket neve"
+  type = string
+  default = null
+
+}
+variable "lambda_execution_role_arn" {
+  description = "Lambda függvény végrehajtási szerepkör ARN-je"
+  type        = string
+  default     = null
+
+}
+variable "command_queue_url" {
+  description = "SQS parancs várólista URL-je"
+  type        = string
+  default     = null
+  
 }

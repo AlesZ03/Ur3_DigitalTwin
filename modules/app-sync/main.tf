@@ -99,3 +99,52 @@ resource "aws_appsync_resolver" "publish_shadow_update_resolver" {
   response_template = "$util.toJson($context.result)"
 }
   
+
+resource "aws_appsync_datasource" "lambda_ds" {
+  api_id           = aws_appsync_graphql_api.ur3_api.id
+  name             = "LambdaShadowDataSource"
+  type             = "AWS_LAMBDA"
+  service_role_arn = aws_iam_role.appsync_role.arn
+
+  lambda_config {
+    function_arn = var.iot_bridge_lambda_arn 
+  }
+}
+
+resource "aws_appsync_resolver" "get_latest_shadow_resolver" {
+  api_id      = aws_appsync_graphql_api.ur3_api.id
+  type        = "Query"
+  field       = "getLatestShadowUpdate"
+  data_source = aws_appsync_datasource.lambda_ds.name
+
+  request_template = <<EOF
+  {
+    "version": "2017-02-28",
+    "operation": "Invoke",
+    "payload": {
+        "arguments": $util.toJson($context.arguments),
+        "info": $util.toJson($context.info)
+    }
+  }
+  EOF
+
+  response_template = "$util.toJson($context.result)"
+}
+
+resource "aws_iam_role_policy" "appsync_lambda_invoke_policy" {
+  name = "${var.project_name}-appsync-lambda-policy"
+  role = aws_iam_role.appsync_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "lambda:InvokeFunction"
+        Resource = var.iot_bridge_lambda_arn
+      }
+    ]
+  })
+}
+
+

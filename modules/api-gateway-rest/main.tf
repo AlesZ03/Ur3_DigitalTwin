@@ -41,7 +41,7 @@ resource "aws_api_gateway_integration" "get_logs_lambda" {
   http_method             = aws_api_gateway_method.get_logs.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = var.lambda_invoke_arn
+  uri                     = aws_lambda_function.s3_read_logs.invoke_arn
 }
 
 # OPTIONS method for CORS
@@ -108,7 +108,7 @@ resource "aws_api_gateway_integration" "post_command_lambda" {
   http_method             = aws_api_gateway_method.post_command.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = var.command_lambda_invoke_arn
+  uri                     = aws_lambda_function.send_command.invoke_arn
 }
 
 # OPTIONS /command for CORS
@@ -180,9 +180,9 @@ resource "aws_api_gateway_integration" "get_command_quick_lambda" {
   rest_api_id             = aws_api_gateway_rest_api.api.id
   resource_id             = aws_api_gateway_resource.command_quick.id
   http_method             = aws_api_gateway_method.get_command_quick.http_method
-  integration_http_method = "POST" # Lambda proxy integration always uses POST
+  integration_http_method = "POST" 
   type                    = "AWS_PROXY"
-  uri                     = var.command_lambda_invoke_arn
+  uri                     = aws_lambda_function.send_command.invoke_arn
 }
 
 # OPTIONS /command/quick for CORS
@@ -254,11 +254,11 @@ resource "aws_api_gateway_deployment" "deployment" {
   triggers = {
     redeployment = sha1(jsonencode(
       [
-        aws_api_gateway_integration.get_logs_lambda.id,
+        aws_api_gateway_integration.get_logs_lambda.uri,
         aws_api_gateway_integration.options_logs.id,
-        aws_api_gateway_integration.post_command_lambda.id,
+        aws_api_gateway_integration.post_command_lambda.uri,
         aws_api_gateway_integration.options_command.id,
-        aws_api_gateway_integration.get_command_quick_lambda.id,
+        aws_api_gateway_integration.get_command_quick_lambda.uri,
         aws_api_gateway_integration.options_command_quick.id,
       ]
     ))
@@ -278,7 +278,7 @@ resource "aws_api_gateway_stage" "stage" {
 resource "aws_lambda_permission" "api_gateway_logs" {
   statement_id  = "AllowAPIGatewayInvokeLogs"
   action        = "lambda:InvokeFunction"
-  function_name = var.lambda_function_name # This is for the logs lambda
+  function_name = aws_lambda_function.s3_read_logs.function_name # This is for the logs lambda
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*" # Allow all methods on all paths for this API
 }
@@ -287,7 +287,74 @@ resource "aws_lambda_permission" "api_gateway_logs" {
 resource "aws_lambda_permission" "api_gateway_command_lambda" {
   statement_id  = "AllowAPIGatewayInvokeCommandLambda"
   action        = "lambda:InvokeFunction"
-  function_name = var.command_lambda_function_name # This is for the send_command lambda
+  function_name = aws_lambda_function.send_command.function_name # This is for the send_command lambda
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*" # Allow all methods on all paths for this API
+}
+
+data "archive_file" "s3_read_lambda" {
+  type        = "zip"
+  output_path = "${path.root}/lambda-dist/s3-read-logs.zip"
+  source {
+    content  = file("${path.root}/lambda/api/read_logs.py")
+    filename = "index.py"
+  }
+}
+
+data "archive_file" "command_lambda" {
+  type        = "zip"
+  output_path = "${path.root}/lambda-dist/send-command.zip"
+  source {
+    content  = file("${path.root}/lambda/api/send_command.py")
+    filename = "index.py"
+  }
+}
+
+resource "aws_lambda_function" "s3_read_logs" {
+  filename         = data.archive_file.s3_read_lambda.output_path
+  function_name    = "${var.api_name}-read-logs"
+  role             = var.lambda_execution_role_arn
+  handler          = "index.lambda_handler"
+  runtime          = "python3.11"
+  timeout          = 30
+  memory_size      = 512
+  source_code_hash = data.archive_file.s3_read_lambda.output_base64sha256
+  environment { variables = { S3_BUCKET_NAME = var.s3_bucket_name } }
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_log_group" "s3_read_logs_lambda" {
+  name              = "/aws/lambda/${aws_lambda_function.s3_read_logs.function_name}"
+  retention_in_days = 7
+  tags = var.tags
+}
+
+resource "aws_lambda_function" "send_command" {
+  filename         = data.archive_file.command_lambda.output_path
+  function_name    = "${var.api_name}-send-command"
+  role             = var.lambda_execution_role_arn
+  handler          = "index.lambda_handler"
+  runtime          = "python3.11"
+  timeout          = 30
+  source_code_hash = data.archive_file.command_lambda.output_base64sha256
+  environment { variables = { COMMAND_QUEUE_URL = var.command_queue_url } }
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_log_group" "send_command_lambda" {
+  name              = "/aws/lambda/${aws_lambda_function.send_command.function_name}"
+  retention_in_days = 7
+  tags = var.tags
+}
+
+resource "aws_dynamodb_table" "twin_state" {
+  name           = "${var.project_name}-twin-state"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "entityId"
+
+  attribute {
+    name = "entityId"
+    type = "S"
+  }
+  tags = var.tags
 }

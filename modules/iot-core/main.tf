@@ -115,10 +115,11 @@ resource "aws_lambda_function" "iot_to_appsync_forwarder" {
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
 
   environment {
-    variables = {
-      APPSYNC_API_URL = var.appsync_api_url
-    }
+  variables = {
+    APPSYNC_API_URL = var.appsync_api_url
+    IOT_ENDPOINT    = var.iot_endpoint 
   }
+}
 
   tags = var.tags
 }
@@ -142,15 +143,21 @@ resource "aws_iam_role_policy" "lambda_policy" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
+ 
       {
         Effect   = "Allow",
         Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
         Resource = "arn:aws:logs:${var.aws_region}:${var.account_id}:log-group:/aws/lambda/${aws_lambda_function.iot_to_appsync_forwarder.function_name}:*"
       },
+ 
       {
         Effect   = "Allow",
-        Action   = "appsync:GraphQL",
-        Resource = "arn:aws:appsync:${var.aws_region}:${var.account_id}:apis/${var.appsync_api_id}/types/Mutation/fields/publishShadowUpdate"
+        Action   = [
+          "appsync:GraphQL",
+          "iot:GetThingShadow"  
+        ],
+   
+        Resource = "*" 
       }
     ]
   })

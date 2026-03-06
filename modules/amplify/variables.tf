@@ -104,3 +104,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "access_token" {
+  description = "GitHub Personal Access Token for Amplify"
+  type        = string
+  sensitive   = true
+}

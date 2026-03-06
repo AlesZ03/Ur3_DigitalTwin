@@ -189,3 +189,14 @@ variable "websocket_dynamodb_table" {
   type        = string
   default     = "robot-websocket-connections"
 }
+variable "iot_bridge_lambda_arn" {
+  description = "Az IoT Bridge Lambda függvény ARN azonosítója"
+  type        = string
+  default     = null
+}
+
+variable "iot_endpoint" {
+  description = "AWS IoT Endpoint Address"
+  type        = string
+  default     = null
+}

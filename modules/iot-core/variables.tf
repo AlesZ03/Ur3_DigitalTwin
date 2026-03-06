@@ -40,3 +40,9 @@ variable "appsync_api_id" {
   description = "The ID of the AppSync API"
   type        = string
 }
+variable "iot_endpoint" {
+  description = "AWS IoT Endpoint Address"
+  type        = string
+  default     = null
+  
+}

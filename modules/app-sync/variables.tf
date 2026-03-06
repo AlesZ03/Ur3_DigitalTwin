@@ -25,3 +25,8 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+variable "iot_bridge_lambda_arn" {
+  description = "Az IoT Bridge Lambda függvény ARN-ja."
+  type        = string
+  default     = null
+}

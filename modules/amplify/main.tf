@@ -1,16 +1,37 @@
 # modules/amplify/main.tf
 
+
+resource "aws_iam_role" "amplify_role" {
+  name = "${var.app_name}-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "amplify.amazonaws.com"
+      }
+    }]
+  })
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "amplify_backend" {
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess-Amplify"
+  role       = aws_iam_role.amplify_role.name
+}
+
+
 resource "aws_amplify_app" "robot_control" {
-  name       = var.app_name
-  repository = var.repository_url
+  name         = var.app_name
+  repository   = var.repository_url
+  access_token = var.access_token 
+  platform     = "WEB"            
 
-  # Build settings
-  build_spec = var.build_spec
-
-  # Environment variables (MAP, not a block!)
+  build_spec            = var.build_spec
   environment_variables = var.environment_variables
 
-  # Custom rules
   dynamic "custom_rule" {
     for_each = var.custom_rules
     content {
@@ -19,34 +40,23 @@ resource "aws_amplify_app" "robot_control" {
       target = custom_rule.value.target
     }
   }
- 
 
-  # Enable auto branch creation
-  enable_auto_branch_creation = var.enable_auto_branch_creation
-  enable_branch_auto_build    = var.enable_branch_auto_build
-  enable_branch_auto_deletion = var.enable_branch_auto_deletion
-
-  # IAM service role
-  iam_service_role_arn = var.iam_service_role_arn
+  iam_service_role_arn = aws_iam_role.amplify_role.arn # Belsőleg hivatkozunk a fenti role-ra!
 
   tags = var.tags
 }
 
-# Branch configuration
 resource "aws_amplify_branch" "main" {
   app_id      = aws_amplify_app.robot_control.id
   branch_name = var.branch_name
 
   enable_auto_build = var.enable_branch_auto_build
 
-  # These are allowed as MAP, so this is correct:
   environment_variables = var.branch_environment_variables
-
-  framework = var.framework
-  stage     = var.stage
+  framework             = var.framework
+  stage                 = var.stage
 }
 
-# Domain association (optional) 
 resource "aws_amplify_domain_association" "main" {
   count = var.domain_name != null ? 1 : 0
 

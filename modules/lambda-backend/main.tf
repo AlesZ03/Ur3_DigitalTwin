@@ -9,7 +9,7 @@ resource "aws_lambda_layer_version" "ur_rtde_layer" {
 # ZIP file for the UR controller Lambda
 data "archive_file" "ur_controller_lambda" {
   type        = "zip"
-  output_path = "${path.module}/ur-controller.zip"
+  output_path = "${path.root}/lambda-dist/ur-controller.zip"
   source {
     content  = file("${path.root}/${var.ur_controller_lambda_source_path}")
     filename = "index.py" # Assuming the handler is index.handler

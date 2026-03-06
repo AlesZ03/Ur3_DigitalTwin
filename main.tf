@@ -91,24 +91,6 @@ resource "aws_iam_role_policy" "lambda_iot_and_messaging_policy"{
   })
 }
 
-# IAM policy for WebSocket API access (for real-time data) 
-resource "aws_iam_role_policy" "lambda_websocket_policy" {
-  name = "LambdaRealtimeDataPolicy"
-  role = aws_iam_role.lambda_execution_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Sid      = "AllowWebSocketPublish",
-        Effect   = "Allow",
-        Action   = "execute-api:ManageConnections",
-        Resource = "arn:aws:execute-api:${var.aws_region}:${data.aws_caller_identity.current.account_id}:${module.websocket_api.websocket_api_id}/*"
-      }
-    ]
-  })
-}
-
 # Policy for S3 read access (for the /logs API endpoint)
 resource "aws_iam_role_policy" "lambda_s3_read_policy" {
   name = "LambdaAPIS3ReadPolicy"
@@ -149,38 +131,21 @@ resource "aws_iam_role_policy" "lambda_sqs_send_policy" {
   })
 }
 
-# Policy for DynamoDB access for WebSocket connection management
-resource "aws_iam_role_policy" "lambda_dynamodb_ws_policy" {
-  name = "LambdaDynamoDBWebSocketPolicy"
-  role = aws_iam_role.lambda_execution_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect   = "Allow",
-        Action   = ["dynamodb:PutItem", "dynamodb:DeleteItem", "dynamodb:Scan"],
-        Resource = aws_dynamodb_table.websocket_connections.arn
-      }
-    ]
-  })
-}
 ########################################################################################################################
 #                                     IOT-Core conf                                                                    #
 ########################################################################################################################
+module "iot_core" {
+  source = "./modules/iot-core"
 
-module "iot_core_lambda" {
-  source = "./modules/iot-core-lambda"
+  project_name    = var.project_name
+  aws_region      = var.aws_region
+  account_id      = data.aws_caller_identity.current.account_id
+  thing_name      = "UR3-Robot-001" # Must match CLIENT_ID in ur-rtde.py
+  certs_output_path = "${path.module}/certs"
+  tags            = var.common_tags
 
-  random_suffix                           = random_string.bucket_suffix.result
-  lambda_execution_role_arn               = aws_iam_role.lambda_execution_role.arn
-  lambda_source_file_path                 = "${path.module}/lambda/iot-core/lambda_data_connector.py"
-  websocket_api_endpoint                  = module.websocket_api.websocket_api_invoke_url
-  websocket_connections_dynamodb_table_name = aws_dynamodb_table.websocket_connections.name
-  aws_account_id                          = data.aws_caller_identity.current.account_id
-  certs_output_path                       = "${path.module}/certs"
-  lambda_zip_path                         = "${path.module}/lambda-dist"
-         
+  appsync_api_url = module.appsync_api.api_url
+  appsync_api_id  = module.appsync_api.api_id
 }
 
 
@@ -292,53 +257,6 @@ module "lambda_robot_processor" {
   log_retention_days    = var.lambda_log_retention_days
 
   tags = var.common_tags
-}
-
-
-
-// IAM role a fizikai eszköz számára (IoT Core vagy direkt SQS access)
-resource "aws_iam_role" "device_role" {
-  name = "${var.project_name}-device-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "iot.amazonaws.com"
-      }
-    }]
-  })
-}
-
-resource "aws_iam_role_policy" "device_policy" {
-  name = "${var.project_name}-device-policy"
-  role = aws_iam_role.device_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "sqs:SendMessage",
-          "sqs:GetQueueAttributes",
-          "sqs:GetQueueUrl"
-        ]
-        Resource = module.device_to_cloud_queue.queue_arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "sqs:ReceiveMessage",
-          "sqs:DeleteMessage",
-          "sqs:GetQueueAttributes"
-        ]
-        Resource = module.cloud_to_device_queue.queue_arn
-      }
-    ]
-  })
 }
 
 // IAM role a cloud-oldali feldolgozó számára (Lambda/EC2)
@@ -511,123 +429,6 @@ resource "aws_cloudwatch_log_group" "send_command_lambda" {
   tags = var.common_tags
 }
 
-# ######################################################################################################################
-# #                                     WebSocket API and Handlers                                                       #
-# ######################################################################################################################
-
-# DynamoDB table to store WebSocket connection IDs
-resource "aws_dynamodb_table" "websocket_connections" {
-  name           = var.websocket_dynamodb_table
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "connectionId"
-
-  attribute {
-    name = "connectionId"
-    type = "S"
-  }
-
-  tags = var.common_tags
-}
-
-# ZIP file for the connect handler
-data "archive_file" "ws_connect_lambda" {
-  type        = "zip"
-  output_path = "${path.module}/lambda-dist/ws-connect.zip"
-  source {
-    content  = file("${path.module}/lambda/ws/connect.py")
-    filename = "index.py"
-  }
-}
-
-# ZIP file for the disconnect handler
-data "archive_file" "ws_disconnect_lambda" {
-  type        = "zip"
-  output_path = "${path.module}/lambda-dist/ws-disconnect.zip"
-  source {
-    content  = file("${path.module}/lambda/ws/disconnect.py")
-    filename = "index.py"
-  }
-}
-
-# ZIP file for the default handler
-data "archive_file" "ws_default_lambda" {
-  type        = "zip"
-  output_path = "${path.module}/lambda-dist/ws-default.zip"
-  source {
-    content  = file("${path.module}/lambda/ws/default.py")
-    filename = "index.py"
-  }
-}
-
-# Lambda function for WebSocket $connect
-resource "aws_lambda_function" "ws_connect" {
-  filename         = data.archive_file.ws_connect_lambda.output_path
-  function_name    = "${var.project_name}-ws-connect"
-  role             = aws_iam_role.lambda_execution_role.arn
-  handler          = "index.handler"
-  runtime          = "python3.11"
-  source_code_hash = data.archive_file.ws_connect_lambda.output_base64sha256
-
-  environment {
-    variables = {
-      DYNAMODB_TABLE_NAME = aws_dynamodb_table.websocket_connections.name
-    }
-  }
-  tags = var.common_tags
-}
-
-# Lambda function for WebSocket $disconnect
-resource "aws_lambda_function" "ws_disconnect" {
-  filename         = data.archive_file.ws_disconnect_lambda.output_path
-  function_name    = "${var.project_name}-ws-disconnect"
-  role             = aws_iam_role.lambda_execution_role.arn
-  handler          = "index.handler"
-  runtime          = "python3.11"
-  source_code_hash = data.archive_file.ws_disconnect_lambda.output_base64sha256
-
-  environment {
-    variables = {
-      DYNAMODB_TABLE_NAME = aws_dynamodb_table.websocket_connections.name
-    }
-  }
-  tags = var.common_tags
-}
-
-# Lambda function for WebSocket $default
-resource "aws_lambda_function" "ws_default" {
-  filename         = data.archive_file.ws_default_lambda.output_path
-  function_name    = "${var.project_name}-ws-default"
-  role             = aws_iam_role.lambda_execution_role.arn
-  handler          = "index.handler"
-  runtime          = "python3.11"
-  source_code_hash = data.archive_file.ws_default_lambda.output_base64sha256
-
-  tags = var.common_tags
-}
-
-# WebSocket API Gateway
-module "websocket_api" {
-  source = "./modules/api-gateway-websocket"
-
-  api_name = "${var.project_name}-realtime-api"
-  aws_region = var.aws_region
-
-  connect_lambda_invoke_arn    = aws_lambda_function.ws_connect.invoke_arn
-  connect_lambda_function_name = aws_lambda_function.ws_connect.function_name
-  disconnect_lambda_invoke_arn = aws_lambda_function.ws_disconnect.invoke_arn
-  disconnect_lambda_function_name = aws_lambda_function.ws_disconnect.function_name
-  default_lambda_invoke_arn    = aws_lambda_function.ws_default.invoke_arn
-  default_lambda_function_name = aws_lambda_function.ws_default.function_name
-
-  depends_on = [
-    aws_lambda_function.ws_connect,
-    aws_lambda_function.ws_disconnect,
-    aws_lambda_function.ws_default
-  ]
-
-  tags = var.common_tags
-}
-
 # DynamoDB table to store the twin's operational mode (CONNECTED vs SIMULATED)
 resource "aws_dynamodb_table" "twin_state" {
   name           = "${var.project_name}-twin-state"
@@ -640,6 +441,20 @@ resource "aws_dynamodb_table" "twin_state" {
   }
 
   tags = var.common_tags
+}
+
+######################################################################################################################
+#                                     AppSync for Real-time Data (Modular)                                           #
+######################################################################################################################
+
+module "appsync_api" { # Renamed from "app_sync" to match the module call
+  source = "./modules/app-sync"
+
+  project_name = var.project_name
+  aws_region   = var.aws_region
+  account_id   = data.aws_caller_identity.current.account_id
+  schema_path  = "${path.module}/schema.graphql"
+  tags         = var.common_tags
 }
 
 
@@ -833,10 +648,12 @@ resource "aws_amplify_branch" "github_main" {
   branch_name = var.amplify_branch_name
 
   environment_variables = {
-    REACT_APP_API_URL         = module.ur3_api_gateway.api_url
-    REACT_APP_COMMAND_API_URL = module.ur3_api_gateway.command_api_url
+    REACT_APP_API_URL               = module.ur3_api_gateway.api_url
+    REACT_APP_COMMAND_API_URL       = module.ur3_api_gateway.command_api_url
     REACT_APP_COMMAND_QUICK_API_URL = module.ur3_api_gateway.command_quick_api_url # Új környezeti változó
-    REACT_APP_WEBSOCKET_URL   = module.websocket_api.websocket_api_invoke_url
+    REACT_APP_APPSYNC_URL           = module.appsync_api.api_url
+    REACT_APP_APPSYNC_API_KEY       = module.appsync_api.api_key
+    REACT_APP_APPSYNC_REGION        = var.aws_region
   }
 
   enable_auto_build = true

@@ -1,0 +1,46 @@
+input JointStateInput {
+  joint_positions: [Float]
+  timestamp: Float
+}
+
+input ShadowStateInput {
+  reported: JointStateInput
+  desired: JointStateInput
+  delta: JointStateInput
+}
+
+type JointState @aws_iam @aws_api_key {
+  joint_positions: [Float]
+  timestamp: Float
+}
+
+type ShadowState @aws_iam @aws_api_key {
+  reported: JointState
+  desired: JointState
+  delta: JointState
+}
+
+type ThingShadow @aws_iam @aws_api_key {
+  state: ShadowState
+  version: Int
+  timestamp: AWSTimestamp
+}
+
+type Mutation {
+  publishShadowUpdate(
+    state: ShadowStateInput!
+    version: Int
+    timestamp: AWSTimestamp
+  ): ThingShadow @aws_iam @aws_api_key
+}
+
+type Subscription {
+  onUr3ShadowUpdate: ThingShadow
+    @aws_subscribe(mutations: ["publishShadowUpdate"])
+    @aws_iam @aws_api_key
+}
+
+type Query {
+  getApiVersion: String
+  getLatestShadowUpdate: ThingShadow
+}

@@ -22,8 +22,8 @@ LOG_QUEUE_URL = 'https://sqs.us-east-1.amazonaws.com/359289023072/ur3-digital-tw
 
 # AWS IoT Core (Paho MQTT)
 AWS_IOT_ENDPOINT = "a13j85r7ze62nv-ats.iot.us-east-1.amazonaws.com" 
-IOT_TOPIC_TELEMETRY = 'ur3/robot/telemetry'
 CLIENT_ID = "UR3-Robot-001" 
+IOT_SHADOW_UPDATE_TOPIC = f"$aws/things/{CLIENT_ID}/shadow/update"
 
 # Tanúsítványok (a Terraform generálja őket)
 CERTS_DIR = "certs"
@@ -65,25 +65,38 @@ def data_sender(rtde_r, mqtt_client):
                 time.sleep(1)
                 continue
 
-            message_body = {
+            # Payload for historical logs via SQS
+            log_payload_dict = {
                 "joint_positions": [round(p, 4) for p in joint_positions],
                 "timestamp": time.time()
             }
-            payload = json.dumps(message_body)
 
-            if mqtt_client and mqtt_client.is_connected():
-                mqtt_client.publish(
-                    topic=IOT_TOPIC_TELEMETRY,
-                    payload=payload,
-                    qos=1
-                )
-            else:
-                logging.warning("MQTT kliens nincs csatlakozva, a valós idejű telemetria küldés szünetel...")
+            # Payload for real-time Device Shadow update
+            shadow_payload_dict = {
+                "state": {
+                    "reported": log_payload_dict
+                }
+            }
+            shadow_payload_json = json.dumps(shadow_payload_dict)
 
-  
-            sqs.send_message(QueueUrl=LOG_QUEUE_URL, MessageBody=payload)
+            # --- Valós idejű Shadow frissítés ---
+            try:
+                if mqtt_client and mqtt_client.is_connected():
+                    # Publish to the shadow update topic for real-time updates
+                    #logging.info(f"Publikálás az IoT Shadow topicra: {IOT_SHADOW_UPDATE_TOPIC}")
+                    mqtt_client.publish(topic=IOT_SHADOW_UPDATE_TOPIC, payload=shadow_payload_json, qos=1)
+                else:
+                    logging.warning("MQTT kliens nincs csatlakozva, a Device Shadow frissítés szünetel...")
+            except Exception as mqtt_e:
+                logging.error(f"Hiba az MQTT publikálás során: {mqtt_e}")
 
-            time.sleep(0.1)  
+            # --- Historikus log küldése SQS-be ---
+            try:
+                sqs.send_message(QueueUrl=LOG_QUEUE_URL, MessageBody=json.dumps(log_payload_dict))
+            except Exception as sqs_e:
+                logging.error(f"Hiba az SQS üzenetküldés során: {sqs_e}")
+
+            time.sleep(0.1)
         except Exception as e:
             logging.error(f"Hiba az adatküldő szálban: {e}", exc_info=True)
             time.sleep(1)

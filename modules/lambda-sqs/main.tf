@@ -2,6 +2,7 @@
 
 data "aws_caller_identity" "current" {}
 
+
 # IAM role a Lambda függvényhez
 resource "aws_iam_role" "lambda_role" {
   name = "${var.function_name}-role"
@@ -122,3 +123,4 @@ resource "aws_lambda_event_source_mapping" "sqs_trigger" {
     maximum_concurrency = var.maximum_concurrency
   }
 }
+

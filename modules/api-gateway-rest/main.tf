@@ -310,6 +310,7 @@ data "archive_file" "command_lambda" {
   }
 }
 
+
 resource "aws_lambda_function" "s3_read_logs" {
   filename         = data.archive_file.s3_read_lambda.output_path
   function_name    = "${var.api_name}-read-logs"
@@ -334,13 +335,34 @@ resource "aws_lambda_function" "send_command" {
   function_name    = "${var.api_name}-send-command"
   role             = var.lambda_execution_role_arn
   handler          = "index.lambda_handler"
-  runtime          = "python3.11"
+  runtime          = "python3.10"
   timeout          = 30
   source_code_hash = data.archive_file.command_lambda.output_base64sha256
+  layers = [aws_lambda_layer_version.robotics_math_layer.arn]
+  memory_size      = 512
   environment { variables = { COMMAND_QUEUE_URL = var.command_queue_url } }
   tags = var.tags
 }
+resource "aws_s3_object" "robotics_layer_zip" {
+  bucket = var.s3_bucket_name 
+  key    = "layers/robotics_layer.zip"
+  source = "${path.root}/lambda/layers/robotics_layer.zip"
 
+ 
+  etag = filemd5("${path.root}/lambda/layers/robotics_layer.zip")
+}
+
+resource "aws_lambda_layer_version" "robotics_math_layer" {
+  layer_name          = "robotics_math_toolbox"
+  compatible_runtimes = ["python3.11", "python3.12"]
+  description         = "NumPy, RoboticsToolbox and SpatialMath for UR3 IK"
+
+  s3_bucket = aws_s3_object.robotics_layer_zip.bucket
+  s3_key    = aws_s3_object.robotics_layer_zip.key
+
+  
+  source_code_hash = filebase64sha256("${path.root}/lambda/layers/robotics_layer.zip")
+}
 resource "aws_cloudwatch_log_group" "send_command_lambda" {
   name              = "/aws/lambda/${aws_lambda_function.send_command.function_name}"
   retention_in_days = 7

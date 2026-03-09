@@ -16,8 +16,7 @@ from rtde_receive import RTDEReceiveInterface as RTDEReceive
 ROBOT_IP = "172.17.0.2" 
 AWS_REGION = 'us-east-1'
 
-# SQS Sorok 
-COMMAND_QUEUE_URL = 'https://sqs.us-east-1.amazonaws.com/359289023072/ur3-digital-twin-cloud-to-device' 
+
 LOG_QUEUE_URL = 'https://sqs.us-east-1.amazonaws.com/359289023072/ur3-digital-twin-device-to-cloud'     
 
 # AWS IoT Core (Paho MQTT)
@@ -25,7 +24,10 @@ AWS_IOT_ENDPOINT = "a13j85r7ze62nv-ats.iot.us-east-1.amazonaws.com"
 CLIENT_ID = "UR3-Robot-001" 
 IOT_SHADOW_UPDATE_TOPIC = f"$aws/things/{CLIENT_ID}/shadow/update"
 
-# Tanúsítványok (a Terraform generálja őket)
+
+IOT_COMMAND_TOPIC = "ur3/commands"
+
+# Tanúsítványok 
 CERTS_DIR = "certs"
 PATH_TO_ROOT_CA = os.path.join(CERTS_DIR, "AmazonRootCA1.pem")
 PATH_TO_CERT = os.path.join(CERTS_DIR, "device.pem.crt")
@@ -37,7 +39,6 @@ stop_event = threading.Event()
 
 # --- Logging beállítása ---
 def setup_logging():
-    """Beállítja a Python logging modult, hogy a logokat a konzolra küldje."""
     stream_handler = logging.StreamHandler(sys.stdout)
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     stream_handler.setFormatter(formatter)
@@ -47,31 +48,27 @@ def setup_logging():
     root_logger.handlers.clear() 
     root_logger.addHandler(stream_handler)
     
-    # Külső könyvtárak logjainak halkítása
     logging.getLogger('boto3').setLevel(logging.WARNING)
     logging.getLogger('botocore').setLevel(logging.WARNING)
     logging.getLogger('urllib3').setLevel(logging.WARNING)
 
 # --- Adatküldő szál (telemetria) ---
 def data_sender(rtde_r, mqtt_client):
-    """Folyamatosan olvassa a robot pozícióját, és küldi az AWS IoT Core-ra (valós idejű) és SQS-be (historikus)."""
     sqs = boto3.client('sqs', region_name=AWS_REGION)
     logging.info("Adatküldő szál (telemetria) elindult.")
     while not stop_event.is_set():
         try:
             joint_positions = rtde_r.getActualQ()
             if joint_positions is None:
-                logging.warning("Nem sikerült lekérni a robot pozícióját (getActualQ: None).")
+                logging.warning("Nem sikerült lekérni a robot pozícióját.")
                 time.sleep(1)
                 continue
 
-            # Payload for historical logs via SQS
             log_payload_dict = {
                 "joint_positions": [round(p, 4) for p in joint_positions],
                 "timestamp": time.time()
             }
 
-            # Payload for real-time Device Shadow update
             shadow_payload_dict = {
                 "state": {
                     "reported": log_payload_dict
@@ -79,18 +76,12 @@ def data_sender(rtde_r, mqtt_client):
             }
             shadow_payload_json = json.dumps(shadow_payload_dict)
 
-            # --- Valós idejű Shadow frissítés ---
             try:
                 if mqtt_client and mqtt_client.is_connected():
-                    # Publish to the shadow update topic for real-time updates
-                    #logging.info(f"Publikálás az IoT Shadow topicra: {IOT_SHADOW_UPDATE_TOPIC}")
                     mqtt_client.publish(topic=IOT_SHADOW_UPDATE_TOPIC, payload=shadow_payload_json, qos=1)
-                else:
-                    logging.warning("MQTT kliens nincs csatlakozva, a Device Shadow frissítés szünetel...")
             except Exception as mqtt_e:
                 logging.error(f"Hiba az MQTT publikálás során: {mqtt_e}")
 
-            # --- Historikus log küldése SQS-be ---
             try:
                 sqs.send_message(QueueUrl=LOG_QUEUE_URL, MessageBody=json.dumps(log_payload_dict))
             except Exception as sqs_e:
@@ -102,49 +93,36 @@ def data_sender(rtde_r, mqtt_client):
             time.sleep(1)
     logging.info("Adatküldő szál leállt.")
 
-def command_receiver():
-    """Folyamatosan figyeli az SQS-t bejövő parancsokért."""
-    sqs = boto3.client('sqs', region_name=AWS_REGION)
-    logging.info("Parancsfogadó szál elindult.")
-    while not stop_event.is_set():
-        try:
-            response = sqs.receive_message(
-                QueueUrl=COMMAND_QUEUE_URL,
-                MaxNumberOfMessages=1,
-                WaitTimeSeconds=10,
-                MessageAttributeNames=['All']
-            )
-            if 'Messages' in response:
-                message = response['Messages'][0]
-                receipt_handle = message['ReceiptHandle']
-                try:
-                    command_body = json.loads(message['Body'])
-                    logging.info(f"Parancs fogadva: {command_body}")
-                    command_queue.put(command_body)
-                    sqs.delete_message(QueueUrl=COMMAND_QUEUE_URL, ReceiptHandle=receipt_handle)
-                except json.JSONDecodeError:
-                    logging.error(f"Hiba: A beérkezett üzenet nem valid JSON: {message['Body']}")
-
-                    sqs.delete_message(QueueUrl=COMMAND_QUEUE_URL, ReceiptHandle=receipt_handle)
-                except Exception as e:
-                    logging.error(f"Hiba a parancs feldolgozása közben: {e}", exc_info=True)
-        except Exception as e:
-            logging.error(f"Hiba a parancsfogadó szálban: {e}", exc_info=True)
-            time.sleep(5) 
-    logging.info("Parancsfogadó szál leállt.")
-
 # --- MQTT Callback függvények ---
 def on_connect(client, userdata, flags, rc, properties=None):
-    """Meghívódik, amikor a kliens csatlakozik az AWS IoT-hoz."""
     if rc == 0:
         logging.info("Sikeresen csatlakozva az AWS IoT Core-hoz!")
-    else:
         
-        logging.error(f"Csatlakozási hiba az AWS IoT Core-hoz, kód: {rc}. Lehetséges okok: 1: hibás protokoll, 2: hibás kliens ID, 3: szerver nem elérhető, 4: hibás felhasználónév/jelszó, 5: nincs jogosultság.")
+        # --- ÚJ: Feliratkozás a parancs topikra csatlakozáskor ---
+        client.subscribe(IOT_COMMAND_TOPIC, qos=1)
+        logging.info(f"Sikeresen feliratkozva a parancs topikra: {IOT_COMMAND_TOPIC}")
+    else:
+        logging.error(f"Csatlakozási hiba az AWS IoT Core-hoz, kód: {rc}.")
+
+# --- ÚJ: Üzenet fogadása MQTT-n keresztül ---
+def on_message(client, userdata, msg):
+    """Meghívódik, amikor üzenet érkezik a feliratkozott topikra (ur3/commands)."""
+    try:
+        payload_str = msg.payload.decode('utf-8')
+        logging.info(f"MQTT parancs érkezett ({msg.topic}): {payload_str}")
+        
+        command_body = json.loads(payload_str)
+        
+        # A beérkezett parancsot betesszük a queue-ba, amit a fő szál dolgoz fel
+        command_queue.put(command_body)
+    except json.JSONDecodeError:
+        logging.error(f"Hiba: A beérkezett MQTT üzenet nem valid JSON: {msg.payload}")
+    except Exception as e:
+        logging.error(f"Hiba a beérkezett MQTT parancs feldolgozása közben: {e}", exc_info=True)
+
 
 # --- Fő program ---
 def main():
-    """Inicializálja a kapcsolatot, elindítja a szálakat és vezérli a robotot."""
     setup_logging()
     
     rtde_c = None
@@ -153,7 +131,7 @@ def main():
     threads = []
 
     try:
-
+       
         for i in range(5):
             try:
                 logging.info(f"Kapcsolódás a robothoz ({ROBOT_IP})... ({i+1}. próbálkozás)")
@@ -170,16 +148,22 @@ def main():
                     raise ConnectionError(f"Nem sikerült csatlakozni a robothoz ({ROBOT_IP}) 5 próbálkozás után.") from e
                 time.sleep(5)
 
-
+       
         for i in range(5):
             try:
                 logging.info(f"MQTT kliens beállítása... ({i+1}. próbálkozás)")
                 mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=CLIENT_ID)
+              
                 mqtt_client.on_connect = on_connect
+                mqtt_client.on_message = on_message 
+                
                 mqtt_client.tls_set(ca_certs=PATH_TO_ROOT_CA, certfile=PATH_TO_CERT, keyfile=PATH_TO_KEY,
                                     cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLSv1_2, ciphers=None)
+                
                 logging.info(f"Csatlakozás az AWS IoT végponthoz: {AWS_IOT_ENDPOINT}...")
                 mqtt_client.connect(AWS_IOT_ENDPOINT, 8883, 60)
+                
+              
                 mqtt_client.loop_start()
 
                 time.sleep(2)
@@ -195,20 +179,22 @@ def main():
                     raise ConnectionError("Nem sikerült csatlakozni az AWS IoT Core-hoz 5 próbálkozás után.") from e
                 time.sleep(5)
 
-
+        
         threads = [
-            threading.Thread(target=data_sender, name="DataSender", args=(rtde_r, mqtt_client)),
-            threading.Thread(target=command_receiver, name="CommandReceiver")
+            threading.Thread(target=data_sender, name="DataSender", args=(rtde_r, mqtt_client))
         ]
         for t in threads:
             t.start()
         
         logging.info("A rendszer működik. A leállításhoz nyomj Ctrl+C-t.")
         
-
+      
         while not stop_event.is_set():
             try:
+                # Várakozás parancsra (az on_message teszi ide őket)
                 command_data = command_queue.get(timeout=1)
+                
+                # Kibontjuk a 'command' objektumot, ha be van csomagolva
                 command = command_data.get('command', command_data)
                 
                 if 'action' not in command:
@@ -262,13 +248,10 @@ def main():
         logging.info("A leállítási folyamat megkezdődött...")
         stop_event.set()
         
-   
         for t in threads:
             if t.is_alive():
                 logging.info(f"Várakozás a(z) '{t.name}' szál leállására...")
                 t.join(timeout=5)
-                if t.is_alive():
-                    logging.warning(f"A(z) '{t.name}' szál nem állt le időben.")
         
         if mqtt_client:
             logging.info("MQTT kapcsolat bontása.")
@@ -280,7 +263,7 @@ def main():
             try:
                 rtde_c.stopScript()
             except Exception as e:
-                logging.error(f"Hiba a robot script leállítása közben: {e}")
+                pass
             finally:
                 rtde_c.disconnect()
 

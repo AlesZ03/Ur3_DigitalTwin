@@ -6,7 +6,7 @@ from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 from botocore.session import get_session
 import boto3
-
+import math
 # Logger beállítása
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -36,6 +36,23 @@ mutation PublishShadowUpdate($state: ShadowStateInput!, $version: Int, $timestam
   }
 }
 """
+def apply_correction(joint_positions):
+    """
+    Elvégzi a 3D modellhez szükséges korrekciót a nyers csuklópozíciókon.
+    """
+    if not isinstance(joint_positions, list) or len(joint_positions) != 6:
+        return joint_positions # Hiba esetén visszatér a nyers adattal
+
+    # A JSX-ben lévő logika átültetve Pythonba
+    corrected_positions = [
+        joint_positions[0],                      # Joint 0: Váll forgatás (pan)
+        joint_positions[1]+(math.pi/2),      # Joint 1: Váll emelés (lift)
+        joint_positions[2],                      # Joint 2: Könyök
+        joint_positions[3] +(math.pi/2),                   # Joint 3: Csukló 1
+        joint_positions[4]*-1,                      # Joint 4: Csukló 2
+        joint_positions[5]                       # Joint 5: Csukló 3
+    ]
+    return corrected_positions
 
 def sign_and_make_request(query, variables):
     """Aláírja a GraphQL kérést SigV4-gyel és elküldi a beépített urllib használatával."""
@@ -84,24 +101,34 @@ def lambda_handler(event, context):
             response = iot_data_client.get_thing_shadow(thingName="UR3-Robot-001")
             shadow_payload = json.loads(response['payload'].read().decode('utf-8'))
             
+            # Korrekció alkalmazása a shadow adatokra is
+            state = shadow_payload.get("state", {})
+            reported = state.get('reported', {})
+            if 'joint_positions' in reported:
+                reported['joint_positions'] = apply_correction(reported['joint_positions'])
+                state['reported'] = reported
+            
             return {
-                "state": shadow_payload.get("state", {}),
+                "state": state,
                 "version": shadow_payload.get("version"),
                 "timestamp": shadow_payload.get("timestamp")
             }
         except Exception as e:
             logger.error(f"Error fetching shadow: {str(e)}")
             raise e
-        
-    """A Lambda belépési pontja, amit az IoT Rule hív meg."""
+
     logger.info(f"Event received from IoT Rule: {json.dumps(event)}")
+    state = event.get('state', {})
+    reported = state.get('reported', {})
+    if 'joint_positions' in reported:
+        reported['joint_positions'] = apply_correction(reported['joint_positions'])
+        state['reported'] = reported
+        logger.info(f"Corrected joint positions: {reported['joint_positions']}")
 
     variables = {
-        "state": event.get('state', {}),
-        "version": event.get('version'),
+        "state": state,  
         "timestamp": event.get('timestamp')
     }
-
     try:
         logger.info(f"Calling AppSync mutation with variables: {json.dumps(variables)}")
         response = sign_and_make_request(MUTATION, variables)

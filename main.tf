@@ -276,6 +276,25 @@ module "backend_monitoring" {
   cloud_to_device_queue_name = module.cloud_to_device_queue.queue_name
 }
 ######################################################################################################################
+#                                     SQS to IoT Core Bridge Lambda                                                  #
+######################################################################################################################
+
+module "lambda_iot_bridge" {
+  source = "./modules/lambda-bridge-sqs-iot" 
+
+  bridge_function_name           = "${var.project_name}-sqs-to-iot"
+  
+
+  sqs_queue_arn                  = module.cloud_to_device_queue.queue_arn
+
+  iot_endpoint                   = data.aws_iot_endpoint.current.endpoint_address
+  iot_topic                      = "ur3/commands" 
+  
+ 
+  bridge_lambda_source_file_path = "${path.module}/lambda/sqs/iot-core-sqs.py"
+  bridge_lambda_output_zip_path  = "${path.module}/lambda-dist/bridge.zip"
+}
+######################################################################################################################
 #                                     AppSync for Real-time Data (Modular)                                           #
 ######################################################################################################################
 

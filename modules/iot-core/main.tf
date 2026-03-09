@@ -53,7 +53,9 @@ resource "aws_iot_policy" "ur3_robot_policy" {
         # Allows subscribing to shadow response topics
         Effect   = "Allow"
         Action   = "iot:Subscribe"
-        Resource = "arn:aws:iot:${var.aws_region}:${var.account_id}:topicfilter/$aws/things/${aws_iot_thing.ur3_robot.name}/shadow/*"
+        Resource = [
+        "arn:aws:iot:us-east-1:359289023072:topicfilter/$aws/things/UR3-Robot-001/shadow/*",
+        "arn:aws:iot:us-east-1:359289023072:topicfilter/ur3/commands"]
       }
     ]
   })

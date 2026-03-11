@@ -41,8 +41,9 @@ resource "aws_iot_policy" "ur3_robot_policy" {
         # Allows publishing to the device's own shadow topic
         Effect   = "Allow"
         Action   = "iot:Publish"
-        Resource = "arn:aws:iot:${var.aws_region}:${var.account_id}:topic/$aws/things/${aws_iot_thing.ur3_robot.name}/shadow/update"
-      },
+        Resource = ["arn:aws:iot:${var.aws_region}:${var.account_id}:topic/$aws/things/${aws_iot_thing.ur3_robot.name}/shadow/update",
+        "arn:aws:iot:${var.aws_region}:${var.account_id}:topic/ur3/logs"
+    ]},
       {
         # Allows receiving responses from the shadow service
         Effect   = "Allow"
@@ -150,6 +151,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
         Effect   = "Allow",
         Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
         Resource = "arn:aws:logs:${var.aws_region}:${var.account_id}:log-group:/aws/lambda/${aws_lambda_function.iot_to_appsync_forwarder.function_name}:*"
+        
       },
  
       {

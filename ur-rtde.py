@@ -4,7 +4,7 @@ import queue
 import json
 import logging
 import sys
-import os
+import os  
 import ssl
 import boto3
 import paho.mqtt.client as mqtt

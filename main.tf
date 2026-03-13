@@ -155,24 +155,24 @@ module "iot_core" {
 #                                     timestream conf                                                                    #
 ########################################################################################################################
 
-module "timestream_db" {
-  source              = "./modules/timestream"
-  project_name        = var.project_name
+# module "timestream_db" {
+#   source              = "./modules/timestream"
+#   project_name        = var.project_name
 
-  firehose_stream_arn = module.firehose_ingestion.firehose_arn
-}
+#   firehose_stream_arn = module.firehose_ingestion.firehose_arn
+# }
 ########################################################################################################################
 #                                     Firehose conf                                                                    #
 ########################################################################################################################
 
 
-module "firehose_ingestion" {
-  source            = "./modules/firehose"
-  project_name      = var.project_name
-  account_id        = data.aws_caller_identity.current.account_id
-  aws_region        = var.aws_region
-  lambda_writer_arn = module.timestream_db.writer_lambda_arn
-}
+# module "firehose_ingestion" {
+#   source            = "./modules/firehose"
+#   project_name      = var.project_name
+#   account_id        = data.aws_caller_identity.current.account_id
+#   aws_region        = var.aws_region
+#   lambda_writer_arn = module.timestream_db.writer_lambda_arn
+# }
 ########################################################################################################################
 #                                     SQS-terraform conf                                                               #
 ########################################################################################################################

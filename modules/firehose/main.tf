@@ -1,7 +1,7 @@
 # --- S3 Bucket az adatok tárolására ---
 resource "aws_s3_bucket" "telemetry_bucket" {
   bucket        = "${var.project_name}-telemetry-storage-${var.account_id}"
-  force_destroy = true # Tesztelésnél hasznos, így törléskor az adatokat is törli
+  force_destroy = true 
   
   tags = var.tags
 }
@@ -75,11 +75,11 @@ resource "aws_kinesis_firehose_delivery_stream" "telemetry_stream" {
         }
         parameters {
           parameter_name  = "BufferSizeInMBs"
-          parameter_value = "1" # Minimum puffer méret
+          parameter_value = "1" 
         }
         parameters {
           parameter_name  = "BufferIntervalInSeconds"
-          parameter_value = "60" # Ennyi ideig vár, hogy összegyűljön a csomag
+          parameter_value = "60" 
         }
       }
     }

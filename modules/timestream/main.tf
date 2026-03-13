@@ -40,7 +40,7 @@ resource "aws_iam_role_policy" "lambda_writer_permissions" {
     Version = "2012-10-17"
     Statement = [
       {
-        # Engedély a Timestream íráshoz
+
         Effect   = "Allow"
         Action   = [
           "timestream:WriteRecords",
@@ -49,7 +49,7 @@ resource "aws_iam_role_policy" "lambda_writer_permissions" {
         Resource = "*" 
       },
       {
-        # Engedély a CloudWatch logokhoz (hogy lásd a hibákat)
+
         Effect   = "Allow"
         Action   = [
           "logs:CreateLogGroup",

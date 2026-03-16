@@ -2,11 +2,6 @@
 aws_region = "us-east-1"
 
 
-
-
-
-
-
 amplify_branch_name = "main" 
 
 

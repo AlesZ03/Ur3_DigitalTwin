@@ -149,7 +149,7 @@ module "iot_core" {
   aws_region      = var.aws_region
   account_id      = data.aws_caller_identity.current.account_id
   thing_name      = "UR3-Robot-001" 
-  certs_output_path = "${path.module}/certs"
+  certs_output_path = "${path.module}/../edge_device/certs"
   tags            = var.common_tags
 
   appsync_api_url = module.appsync_api.api_url

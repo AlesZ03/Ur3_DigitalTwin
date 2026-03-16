@@ -117,11 +117,11 @@ ehthumbs.db
 Desktop.ini
 
 # Secrets
-*.pem
-*.key
-*.crt
-secrets.yml
-
+**/*.pem
+**/*.key
+**/*.crt
+**/*.csr
+**/certs/
 # Uvicorn / ASGI / uv-related runtime
 # PID and socket files
 *.pid

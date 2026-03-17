@@ -56,6 +56,16 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: cd iac && terraform apply -auto-approve tfplan
 
+      # --- Certificate Upload Szakasz ---
+      - name: Upload Robot Certificates
+        uses: actions/upload-artifact@v4
+        with:
+          name: robot-certs-${{ github.run_number }}
+          path: |
+            edge_device/certs/*.pem
+            edge_device/certs/*.key
+            edge_device/certs/*.crt
+          retention-days: 1
   # --- DESTROY SZAKASZ (Külön Job a manuális törléshez) ---
   destroy:
     name: "Terraform Destroy"

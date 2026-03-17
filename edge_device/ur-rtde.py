@@ -17,7 +17,7 @@ ROBOT_IP = "172.17.0.2"
 AWS_REGION = 'us-east-1'
 
 
-LOG_QUEUE_URL = 'https://sqs.us-east-1.amazonaws.com/359289023072/ur3-digital-twin-device-to-cloud'     
+LOG_QUEUE_URL = 'https://sqs.us-east-1.amazonaws.com/359289023072/Ur3_DigitalTwin-device-to-cloud'     
 
 # AWS IoT Core (Paho MQTT)
 AWS_IOT_ENDPOINT = "a13j85r7ze62nv-ats.iot.us-east-1.amazonaws.com" 

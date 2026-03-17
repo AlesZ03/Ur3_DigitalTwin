@@ -1,21 +1,21 @@
-name: "Terraform Deployment"
+name: "Terraform UR3 Pipeline"
 
 on:
   push:
     branches:
       - main
   pull_request:
+  workflow_dispatch: 
 
 permissions:
-  id-token: write 
-  contents: read  
+  id-token: write
+  contents: read
 
 jobs:
   terraform:
     name: "Terraform"
     runs-on: ubuntu-latest
     env:
-   
       TF_VAR_aws_region: ${{ vars.AWS_REGION }}
       TF_VAR_project_name: "Ur3_DigitalTwin"
 
@@ -41,9 +41,45 @@ jobs:
             -backend-config="key=dev/terraform.tfstate" \
             -backend-config="dynamodb_table=terraform-state-locking"
 
-      - name: Terraform Plan
-        run: cd iac && terraform plan -input=false
+      - name: Terraform Format Check (Lint)
+        run: cd iac && terraform fmt -check -recursive
 
+      - name: Terraform Plan
+        id: plan
+        run: cd iac && terraform plan -out=tfplan
+
+      # --- APPLY SZAKASZ ---
+  
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: cd iac && terraform apply -auto-approve -input=false
+        run: cd iac && terraform apply -auto-approve tfplan
+
+  # --- DESTROY SZAKASZ (Külön Job a manuális törléshez) ---
+  destroy:
+    name: "Terraform Destroy"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' # Csak kézi indításnál jelenik meg
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: |
+          cd iac
+          terraform init \
+            -backend-config="bucket=${{ vars.STATE_BUCKET_NAME }}" \
+            -backend-config="region=${{ vars.AWS_REGION }}" \
+            -backend-config="key=dev/terraform.tfstate" \
+            -backend-config="dynamodb_table=terraform-state-locking"
+
+      - name: Terraform Destroy
+        run: cd iac && terraform destroy -auto-approve

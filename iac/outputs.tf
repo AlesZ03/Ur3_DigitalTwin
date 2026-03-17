@@ -1,4 +1,4 @@
- 
+
 
 output "iot_endpoint" {
   description = "The endpoint for the AWS IoT Core service. Copy this to your core-test.py and ur-rtde.py scripts."

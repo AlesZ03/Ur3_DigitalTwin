@@ -85,12 +85,12 @@ data "archive_file" "lambda_zip" {
 resource "aws_lambda_function" "function" {
   filename         = data.archive_file.lambda_zip.output_path
   function_name    = var.function_name
-  role            = aws_iam_role.lambda_role.arn
-  handler         = var.handler
+  role             = aws_iam_role.lambda_role.arn
+  handler          = var.handler
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime         = var.runtime
-  timeout         = var.timeout
-  memory_size     = var.memory_size
+  runtime          = var.runtime
+  timeout          = var.timeout
+  memory_size      = var.memory_size
 
   environment {
     variables = merge(

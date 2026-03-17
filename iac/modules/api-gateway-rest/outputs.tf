@@ -7,7 +7,7 @@ output "api_id" {
 
 output "api_endpoint" {
   description = "API endpoint URL"
-  value       = "${aws_api_gateway_stage.stage.invoke_url}"
+  value       = aws_api_gateway_stage.stage.invoke_url
 }
 
 output "api_url" {

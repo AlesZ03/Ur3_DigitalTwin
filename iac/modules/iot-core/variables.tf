@@ -44,5 +44,5 @@ variable "iot_endpoint" {
   description = "AWS IoT Endpoint Address"
   type        = string
   default     = null
-  
+
 }

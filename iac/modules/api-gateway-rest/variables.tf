@@ -20,20 +20,20 @@ variable "stage_name" {
 
 
 
-variable "project_name" { 
+variable "project_name" {
   description = "Projekt neve"
-  type = string 
+  type        = string
   default     = null
-  }
-variable "tags" { 
+}
+variable "tags" {
   description = "Tagek az API Gateway erőforrásokhoz"
-  type = map(string) 
+  type        = map(string)
   default     = {}
-  }
+}
 variable "s3_bucket_name" {
   description = "S3 bucket neve"
-  type = string
-  default = null
+  type        = string
+  default     = null
 
 }
 variable "lambda_execution_role_arn" {
@@ -46,5 +46,5 @@ variable "command_queue_url" {
   description = "SQS parancs várólista URL-je"
   type        = string
   default     = null
-  
+
 }

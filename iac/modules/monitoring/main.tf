@@ -1,7 +1,7 @@
 resource "aws_iam_role" "cloud_processor_role" {
   name = "${var.project_name}-cloud-processor-role"
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+    Version   = "2012-10-17"
     Statement = [{ Action = "sts:AssumeRole", Effect = "Allow", Principal = { Service = ["lambda.amazonaws.com", "ec2.amazonaws.com"] } }]
   })
 }
@@ -39,7 +39,7 @@ resource "aws_cloudwatch_metric_alarm" "outgoing_queue_age" {
   namespace           = "AWS/SQS"
   period              = "300"
   statistic           = "Maximum"
-  threshold           = "600"  
+  threshold           = "600"
   dimensions          = { QueueName = var.cloud_to_device_queue_name }
 }
 

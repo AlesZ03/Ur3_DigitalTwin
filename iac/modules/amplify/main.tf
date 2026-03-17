@@ -26,8 +26,8 @@ resource "aws_iam_role_policy_attachment" "amplify_backend" {
 resource "aws_amplify_app" "robot_control" {
   name         = var.app_name
   repository   = var.repository_url
-  access_token = var.access_token 
-  platform     = "WEB"            
+  access_token = var.access_token
+  platform     = "WEB"
 
   build_spec            = var.build_spec
   environment_variables = var.environment_variables

@@ -26,8 +26,8 @@ resource "aws_iam_role" "lambda_writer_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "lambda.amazonaws.com" }
     }]
   })
@@ -41,17 +41,17 @@ resource "aws_iam_role_policy" "lambda_writer_permissions" {
     Statement = [
       {
 
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "timestream:WriteRecords",
           "timestream:DescribeEndpoints"
         ]
-        Resource = "*" 
+        Resource = "*"
       },
       {
 
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents"
@@ -64,14 +64,14 @@ resource "aws_iam_role_policy" "lambda_writer_permissions" {
 resource "aws_lambda_function" "firehose_to_timestream" {
   filename         = data.archive_file.lambda_zip.output_path
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  
+
   function_name = "${var.project_name}-firehose-to-timestream"
   role          = aws_iam_role.lambda_writer_role.arn
-  
-  handler       = "writer.handler" 
-  
-  runtime       = "python3.9"
-  timeout       = 60
+
+  handler = "writer.handler"
+
+  runtime = "python3.9"
+  timeout = 60
 
   environment {
     variables = {

@@ -11,13 +11,13 @@ variable "visibility_timeout_seconds" {
 
 variable "message_retention_seconds" {
   type        = number
-  default     = 345600  // 4 nap
+  default     = 345600 // 4 nap
   description = "Üzenet megőrzési idő másodpercben"
 }
 
 variable "max_message_size" {
   type        = number
-  default     = 262144  // 256 KB
+  default     = 262144 // 256 KB
   description = "Maximum üzenet méret bájtokban"
 }
 

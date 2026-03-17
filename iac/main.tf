@@ -63,7 +63,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
   role       = aws_iam_role.lambda_execution_role.name
 }
 
-resource "aws_iam_role_policy" "lambda_iot_and_messaging_policy"{
+resource "aws_iam_role_policy" "lambda_iot_and_messaging_policy" {
   name = "LambdaIoTAndMessagingPolicy"
   role = aws_iam_role.lambda_execution_role.id
 
@@ -137,7 +137,7 @@ resource "aws_iam_role_policy" "lambda_sqs_send_policy" {
 terraform {
   backend "s3" {
 
-                        
+
   }
 }
 
@@ -149,12 +149,12 @@ terraform {
 module "iot_core" {
   source = "./modules/iot-core"
 
-  project_name    = var.project_name
-  aws_region      = var.aws_region
-  account_id      = data.aws_caller_identity.current.account_id
-  thing_name      = "UR3-Robot-001" 
+  project_name      = var.project_name
+  aws_region        = var.aws_region
+  account_id        = data.aws_caller_identity.current.account_id
+  thing_name        = "UR3-Robot-001"
   certs_output_path = "${path.module}/../edge_device/certs"
-  tags            = var.common_tags
+  tags              = var.common_tags
 
   appsync_api_url = module.appsync_api.api_url
   appsync_api_id  = module.appsync_api.api_id
@@ -192,16 +192,16 @@ module "iot_core" {
 module "device_to_cloud_queue" {
   source = "./modules/sqs"
 
-  queue_name                    = "${var.project_name}-device-to-cloud"
-  visibility_timeout_seconds    = 300
-  message_retention_seconds     = 1209600  // 14 nap
-  max_message_size              = 262144   // 256 KB
-  delay_seconds                 = 0
-  receive_wait_time_seconds     = 10       // Long polling
-  
-  enable_dlq                    = true
-  max_receive_count             = 3
-  
+  queue_name                 = "${var.project_name}-device-to-cloud"
+  visibility_timeout_seconds = 300
+  message_retention_seconds  = 1209600 // 14 nap
+  max_message_size           = 262144  // 256 KB
+  delay_seconds              = 0
+  receive_wait_time_seconds  = 10 // Long polling
+
+  enable_dlq        = true
+  max_receive_count = 3
+
   tags = {
     Project     = var.common_tags["Project"]
     Environment = var.common_tags["Environment"]
@@ -215,15 +215,15 @@ module "device_to_cloud_queue" {
 module "cloud_to_device_queue" {
   source = "./modules/sqs"
 
-  queue_name                    = "${var.project_name}-cloud-to-device"
-  visibility_timeout_seconds    = 300
-  message_retention_seconds     = 604800   // 7 nap (parancsok gyorsabban elévülnek)
-  max_message_size              = 262144
-  delay_seconds                 = 0
-  receive_wait_time_seconds     = 10
-  
-  enable_dlq                    = true
-  max_receive_count             = 5        
+  queue_name                 = "${var.project_name}-cloud-to-device"
+  visibility_timeout_seconds = 300
+  message_retention_seconds  = 604800 // 7 nap (parancsok gyorsabban elévülnek)
+  max_message_size           = 262144
+  delay_seconds              = 0
+  receive_wait_time_seconds  = 10
+
+  enable_dlq        = true
+  max_receive_count = 5
   tags = {
     Project     = var.common_tags["Project"]
     Environment = var.common_tags["Environment"]
@@ -262,20 +262,20 @@ module "s3_robot_data" {
 
   tags = var.common_tags
 }
- 
+
 
 # Lambda modul
 module "lambda_robot_processor" {
   source = "./modules/lambda-sqs"
 
-  function_name    = var.lambda_function_name
+  function_name           = var.lambda_function_name
   lambda_source_file_path = "${path.module}/lambda/sqs/data-sqs.py"
   lambda_output_zip_path  = "${path.module}/lambda-dist/${var.lambda_function_name}.zip"
-  handler          = var.lambda_handler
-  runtime          = var.lambda_runtime
-  timeout          = var.lambda_timeout
-  memory_size      = var.lambda_memory_size
-  
+  handler                 = var.lambda_handler
+  runtime                 = var.lambda_runtime
+  timeout                 = var.lambda_timeout
+  memory_size             = var.lambda_memory_size
+
   # SQS trigger beállítása 
   sqs_queue_arn       = module.device_to_cloud_queue.queue_arn
   sqs_batch_size      = var.lambda_sqs_batch_size
@@ -294,12 +294,12 @@ module "lambda_robot_processor" {
 module "backend_monitoring" {
   source = "./modules/monitoring"
 
-  project_name               = var.project_name
-  alert_email                = var.alert_email
+  project_name = var.project_name
+  alert_email  = var.alert_email
 
-  device_to_cloud_queue_arn  = module.device_to_cloud_queue.queue_arn
-  cloud_to_device_queue_arn  = module.cloud_to_device_queue.queue_arn
-  
+  device_to_cloud_queue_arn = module.device_to_cloud_queue.queue_arn
+  cloud_to_device_queue_arn = module.cloud_to_device_queue.queue_arn
+
 
   device_to_cloud_queue_name = module.device_to_cloud_queue.queue_name
   cloud_to_device_queue_name = module.cloud_to_device_queue.queue_name
@@ -309,17 +309,17 @@ module "backend_monitoring" {
 ######################################################################################################################
 
 module "lambda_iot_bridge" {
-  source = "./modules/lambda-bridge-sqs-iot" 
+  source = "./modules/lambda-bridge-sqs-iot"
 
-  bridge_function_name           = "${var.project_name}-sqs-to-iot"
-  
+  bridge_function_name = "${var.project_name}-sqs-to-iot"
 
-  sqs_queue_arn                  = module.cloud_to_device_queue.queue_arn
 
-  iot_endpoint                   = data.aws_iot_endpoint.current.endpoint_address
-  iot_topic                      = "ur3/commands" 
-  
- 
+  sqs_queue_arn = module.cloud_to_device_queue.queue_arn
+
+  iot_endpoint = data.aws_iot_endpoint.current.endpoint_address
+  iot_topic    = "ur3/commands"
+
+
   bridge_lambda_source_file_path = "${path.module}/lambda/sqs/iot-core-sqs.py"
   bridge_lambda_output_zip_path  = "${path.module}/lambda-dist/bridge.zip"
 }
@@ -327,16 +327,16 @@ module "lambda_iot_bridge" {
 #                                     AppSync for Real-time Data (Modular)                                           #
 ######################################################################################################################
 
-module "appsync_api" { 
+module "appsync_api" {
   source = "./modules/app-sync"
 
-  project_name = var.project_name
-  aws_region   = var.aws_region
-  account_id   = data.aws_caller_identity.current.account_id
-  schema_path  = "${path.module}/modules/app-sync/schema.graphql"
-  tags         = var.common_tags
+  project_name          = var.project_name
+  aws_region            = var.aws_region
+  account_id            = data.aws_caller_identity.current.account_id
+  schema_path           = "${path.module}/modules/app-sync/schema.graphql"
+  tags                  = var.common_tags
   iot_bridge_lambda_arn = module.iot_core.lambda_arn
-  
+
 }
 
 
@@ -364,10 +364,10 @@ module "lambda_backend" {
 module "ur3_api_gateway" {
   source = "./modules/api-gateway-rest"
 
-  api_name             = "${var.project_name}-api"
-  api_description      = "REST API for UR3 Digital Twin"
-  stage_name           = "prod"
-  project_name         = var.project_name 
+  api_name        = "${var.project_name}-api"
+  api_description = "REST API for UR3 Digital Twin"
+  stage_name      = "prod"
+  project_name    = var.project_name
 
   lambda_execution_role_arn = aws_iam_role.lambda_execution_role.arn
   s3_bucket_name            = module.s3_robot_data.bucket_name
@@ -381,11 +381,11 @@ module "ur3_api_gateway" {
 module "amplify_frontend" {
   source = "./modules/amplify"
 
-  app_name         = "${var.project_name}-logs-dashboard"
-  repository_url   = "https://github.com/${var.github_repo_owner}/${var.github_repo_name}"
-  access_token     = var.github_personal_access_token
-  branch_name      = var.amplify_branch_name
-  
+  app_name       = "${var.project_name}-logs-dashboard"
+  repository_url = "https://github.com/${var.github_repo_owner}/${var.github_repo_name}"
+  access_token   = var.github_personal_access_token
+  branch_name    = var.amplify_branch_name
+
   enable_branch_auto_build = true
   framework                = "React"
   stage                    = "PRODUCTION"

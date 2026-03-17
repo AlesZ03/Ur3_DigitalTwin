@@ -39,11 +39,11 @@ resource "aws_iot_policy" "ur3_robot_policy" {
       },
       {
         # Allows publishing to the device's own shadow topic
-        Effect   = "Allow"
-        Action   = "iot:Publish"
+        Effect = "Allow"
+        Action = "iot:Publish"
         Resource = ["arn:aws:iot:${var.aws_region}:${var.account_id}:topic/$aws/things/${aws_iot_thing.ur3_robot.name}/shadow/update",
-        "arn:aws:iot:${var.aws_region}:${var.account_id}:topic/ur3/logs"
-    ]},
+          "arn:aws:iot:${var.aws_region}:${var.account_id}:topic/ur3/logs"
+      ] },
       {
         # Allows receiving responses from the shadow service
         Effect   = "Allow"
@@ -52,10 +52,10 @@ resource "aws_iot_policy" "ur3_robot_policy" {
       },
       {
         # Allows subscribing to shadow response topics
-        Effect   = "Allow"
-        Action   = "iot:Subscribe"
+        Effect = "Allow"
+        Action = "iot:Subscribe"
         Resource = [
-        "arn:aws:iot:us-east-1:359289023072:topicfilter/$aws/things/UR3-Robot-001/shadow/*",
+          "arn:aws:iot:us-east-1:359289023072:topicfilter/$aws/things/UR3-Robot-001/shadow/*",
         "arn:aws:iot:us-east-1:359289023072:topicfilter/ur3/commands"]
       }
     ]
@@ -118,11 +118,11 @@ resource "aws_lambda_function" "iot_to_appsync_forwarder" {
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
 
   environment {
-  variables = {
-    APPSYNC_API_URL = var.appsync_api_url
-    IOT_ENDPOINT    = var.iot_endpoint 
+    variables = {
+      APPSYNC_API_URL = var.appsync_api_url
+      IOT_ENDPOINT    = var.iot_endpoint
+    }
   }
-}
 
   tags = var.tags
 }
@@ -132,8 +132,8 @@ resource "aws_iam_role" "lambda_exec_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Action = "sts:AssumeRole",
-      Effect = "Allow",
+      Action    = "sts:AssumeRole",
+      Effect    = "Allow",
       Principal = { Service = "lambda.amazonaws.com" }
     }]
   })
@@ -146,22 +146,22 @@ resource "aws_iam_role_policy" "lambda_policy" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
- 
+
       {
         Effect   = "Allow",
         Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
         Resource = "arn:aws:logs:${var.aws_region}:${var.account_id}:log-group:/aws/lambda/${aws_lambda_function.iot_to_appsync_forwarder.function_name}:*"
-        
+
       },
- 
+
       {
-        Effect   = "Allow",
-        Action   = [
+        Effect = "Allow",
+        Action = [
           "appsync:GraphQL",
-          "iot:GetThingShadow"  
+          "iot:GetThingShadow"
         ],
-   
-        Resource = "*" 
+
+        Resource = "*"
       }
     ]
   })

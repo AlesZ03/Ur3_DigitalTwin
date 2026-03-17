@@ -58,7 +58,7 @@ resource "aws_iam_role_policy" "bridge_lambda_iot_policy" {
         Action = [
           "iot:Publish"
         ]
-    
+
         Resource = "arn:aws:iot:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:topic/${var.iot_topic}"
       }
     ]

@@ -180,7 +180,7 @@ resource "aws_api_gateway_integration" "get_command_quick_lambda" {
   rest_api_id             = aws_api_gateway_rest_api.api.id
   resource_id             = aws_api_gateway_resource.command_quick.id
   http_method             = aws_api_gateway_method.get_command_quick.http_method
-  integration_http_method = "POST" 
+  integration_http_method = "POST"
   type                    = "AWS_PROXY"
   uri                     = aws_lambda_function.send_command.invoke_arn
 }
@@ -327,7 +327,7 @@ resource "aws_lambda_function" "s3_read_logs" {
 resource "aws_cloudwatch_log_group" "s3_read_logs_lambda" {
   name              = "/aws/lambda/${aws_lambda_function.s3_read_logs.function_name}"
   retention_in_days = 7
-  tags = var.tags
+  tags              = var.tags
 }
 
 resource "aws_lambda_function" "send_command" {
@@ -338,17 +338,17 @@ resource "aws_lambda_function" "send_command" {
   runtime          = "python3.10"
   timeout          = 30
   source_code_hash = data.archive_file.command_lambda.output_base64sha256
-  layers = [aws_lambda_layer_version.robotics_math_layer.arn]
+  layers           = [aws_lambda_layer_version.robotics_math_layer.arn]
   memory_size      = 512
   environment { variables = { COMMAND_QUEUE_URL = var.command_queue_url } }
   tags = var.tags
 }
 resource "aws_s3_object" "robotics_layer_zip" {
-  bucket = var.s3_bucket_name 
+  bucket = var.s3_bucket_name
   key    = "layers/robotics_layer.zip"
   source = "${path.root}/lambda/layers/robotics_layer.zip"
 
- 
+
   etag = filemd5("${path.root}/lambda/layers/robotics_layer.zip")
 }
 
@@ -360,19 +360,19 @@ resource "aws_lambda_layer_version" "robotics_math_layer" {
   s3_bucket = aws_s3_object.robotics_layer_zip.bucket
   s3_key    = aws_s3_object.robotics_layer_zip.key
 
-  
+
   source_code_hash = filebase64sha256("${path.root}/lambda/layers/robotics_layer.zip")
 }
 resource "aws_cloudwatch_log_group" "send_command_lambda" {
   name              = "/aws/lambda/${aws_lambda_function.send_command.function_name}"
   retention_in_days = 7
-  tags = var.tags
+  tags              = var.tags
 }
 
 resource "aws_dynamodb_table" "twin_state" {
-  name           = "${var.project_name}-twin-state"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "entityId"
+  name         = "${var.project_name}-twin-state"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "entityId"
 
   attribute {
     name = "entityId"

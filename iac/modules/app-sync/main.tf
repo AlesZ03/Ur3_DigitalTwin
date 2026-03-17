@@ -2,7 +2,7 @@
 
 resource "aws_appsync_graphql_api" "ur3_api" {
   name                = "${var.project_name}-api"
-  authentication_type = "API_KEY" 
+  authentication_type = "API_KEY"
   schema              = file(var.schema_path)
 
   additional_authentication_provider {
@@ -68,7 +68,7 @@ resource "aws_iam_role_policy" "appsync_logging_policy" {
         ],
         Resource = [
           "arn:aws:logs:${var.aws_region}:${var.account_id}:log-group:/aws/appsync/apis/${aws_appsync_graphql_api.ur3_api.id}",
-          
+
           "arn:aws:logs:${var.aws_region}:${var.account_id}:log-group:/aws/appsync/apis/${aws_appsync_graphql_api.ur3_api.id}:*"
         ]
       }
@@ -98,7 +98,7 @@ resource "aws_appsync_resolver" "publish_shadow_update_resolver" {
 
   response_template = "$util.toJson($context.result)"
 }
-  
+
 
 resource "aws_appsync_datasource" "lambda_ds" {
   api_id           = aws_appsync_graphql_api.ur3_api.id
@@ -107,7 +107,7 @@ resource "aws_appsync_datasource" "lambda_ds" {
   service_role_arn = aws_iam_role.appsync_role.arn
 
   lambda_config {
-    function_arn = var.iot_bridge_lambda_arn 
+    function_arn = var.iot_bridge_lambda_arn
   }
 }
 

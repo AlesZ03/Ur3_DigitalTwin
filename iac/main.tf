@@ -90,7 +90,6 @@ resource "aws_iam_role_policy" "lambda_iot_and_messaging_policy" {
     ]
   })
 }
-
 # Policy for DynamoDB read access (for the /logs API endpoint)
 resource "aws_iam_role_policy" "lambda_dynamodb_read_policy" {
   name = "LambdaAPIDynamoDBReadPolicy"

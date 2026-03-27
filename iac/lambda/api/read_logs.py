@@ -97,11 +97,15 @@ def lambda_handler(event, context):
         for item in raw_items:
           
             approx_size_bytes = len(json.dumps(item, cls=DecimalEncoder))
-
+            ts_seconds = float(item.get('timestamp', 0))
+            if ts_seconds > 0:
+                valid_date_str = datetime.fromtimestamp(ts_seconds, tz=timezone.utc).isoformat()
+            else:
+                valid_date_str = item.get('received_at', '') 
             formatted_items.append({
                 "key": f"dynamodb-record/{item.get('message_id', 'unknown')}", 
                 "size": approx_size_bytes,                                    
-                "last_modified": item.get('received_at', ''),                  
+                "last_modified": valid_date_str,                  
                 "message_id": item.get('message_id', ''),
                 "timestamp": item.get('timestamp', 0),
                 "data": {                                                     

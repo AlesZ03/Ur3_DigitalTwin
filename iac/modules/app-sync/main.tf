@@ -20,6 +20,7 @@ resource "aws_appsync_graphql_api" "ur3_api" {
 
 resource "aws_appsync_api_key" "ur3_api_key" {
   api_id = aws_appsync_graphql_api.ur3_api.id
+  expires = "2027-03-20T00:00:00Z"
 
 }
 

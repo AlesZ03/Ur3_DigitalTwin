@@ -90,10 +90,28 @@ def lambda_handler(event, context):
             Limit=limit 
         )
 
-        items = response.get('Items', [])
+        raw_items = response.get('Items', [])
 
-        logger.info(f"Sikeresen lekérve {len(items)} rekord a DynamoDB-ből.")
-        return create_response(200, items)
+        # Visszaalakítjuk a DynamoDB sorokat az S3-as "fájl" formátumra a frontend miatt
+        formatted_items = []
+        for item in raw_items:
+          
+            approx_size_bytes = len(json.dumps(item, cls=DecimalEncoder))
+
+            formatted_items.append({
+                "key": f"dynamodb-record/{item.get('message_id', 'unknown')}", 
+                "size": approx_size_bytes,                                    
+                "last_modified": item.get('received_at', ''),                  
+                "message_id": item.get('message_id', ''),
+                "timestamp": item.get('timestamp', 0),
+                "data": {                                                     
+                    "joint_positions": item.get('joint_positions', []),
+                    "timestamp": item.get('timestamp', 0)
+                }
+            })
+
+        logger.info(f"Sikeresen lekérve és formázva {len(formatted_items)} rekord a DynamoDB-ből.")
+        return create_response(200, formatted_items)
 
     except Exception as e:
         logger.error(f"Váratlan hiba történt: {e}", exc_info=True)

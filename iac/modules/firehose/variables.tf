@@ -12,3 +12,8 @@ variable "tags" {
   default = {}
 }
 
+variable "lambda_writer_arn" {
+  description = "A DynamoDB író Lambda ARN-je"
+  type        = string
+}
+

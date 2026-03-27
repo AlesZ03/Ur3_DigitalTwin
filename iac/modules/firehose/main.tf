@@ -8,7 +8,7 @@ resource "aws_s3_bucket" "telemetry_bucket" {
 
 # --- IAM Role a Firehose-nak ---
 resource "aws_iam_role" "firehose_role" {
-  name = "${var.project_name}-firehose-s3-role"
+  name = "${var.project_name}-firehose-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -18,6 +18,7 @@ resource "aws_iam_role" "firehose_role" {
       Principal = { Service = "firehose.amazonaws.com" }
     }]
   })
+  tags = var.tags
 }
 
 # IAM Policy a Firehose-nak: engedély az S3 írásra és a naplózásra
@@ -59,13 +60,32 @@ resource "aws_kinesis_firehose_delivery_stream" "telemetry_stream" {
 
     compression_format = "UNCOMPRESSED"
 
-    prefix = "data/!{timestamp:yyyy/MM/dd/}"
-
+    prefix              = "data/!{timestamp:yyyy/MM/dd/}"
     error_output_prefix = "errors/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd/}"
+    file_extension      = ".json"
 
-    file_extension = ".json"
 
+    processing_configuration {
+      enabled = true
+
+      processors {
+        type = "Lambda"
+        parameters {
+          parameter_name  = "LambdaArn"
+          parameter_value = "${var.lambda_writer_arn}:$LATEST"
+        }
+        parameters {
+          parameter_name  = "BufferSizeInMBs"
+          parameter_value = "1"
+        }
+        parameters {
+          parameter_name  = "BufferIntervalInSeconds"
+          parameter_value = "60"
+        }
+      }
+    }
   }
+  tags = var.tags
 }
 
 # --- IoT Topic Rule ---
@@ -80,8 +100,45 @@ resource "aws_iam_role" "iot_firehose_role" {
       Principal = { Service = "iot.amazonaws.com" }
     }]
   })
+  tags = var.tags
 }
 
+resource "aws_iam_role_policy" "firehose_policy" {
+  name = "${var.project_name}-firehose-policy"
+  role = aws_iam_role.firehose_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:AbortMultipartUpload",
+          "s3:GetBucketLocation",
+          "s3:GetObject",
+          "s3:ListBucket",
+          "s3:ListBucketMultipartUploads",
+          "s3:PutObject"
+        ]
+        Resource = [
+          aws_s3_bucket.telemetry_bucket.arn,
+          "${aws_s3_bucket.telemetry_bucket.arn}/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "lambda:InvokeFunction",
+          "lambda:GetFunctionConfiguration"
+        ]
+        Resource = [
+          var.lambda_writer_arn,
+          "${var.lambda_writer_arn}:*"
+        ]
+      }
+    ]
+  })
+}
 resource "aws_iam_role_policy" "iot_firehose_policy" {
   name = "${var.project_name}-iot-firehose-policy"
   role = aws_iam_role.iot_firehose_role.id
@@ -95,10 +152,9 @@ resource "aws_iam_role_policy" "iot_firehose_policy" {
     }]
   })
 }
-
 resource "aws_iot_topic_rule" "telemetry_to_firehose" {
   name        = "${replace(var.project_name, "-", "_")}_logs_to_firehose"
-  description = "Robot logok továbbítása S3-ba Firehose-on keresztül"
+  description = "Robot logok továbbítása S3-ba és feldolgozása Lambdával (DynamoDB)"
   enabled     = true
   sql         = "SELECT *, topic() as source_topic FROM 'ur3/logs'"
   sql_version = "2016-03-23"

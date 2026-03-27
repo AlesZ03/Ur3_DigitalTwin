@@ -95,7 +95,7 @@ def lambda_handler(event, context):
         # Visszaalakítjuk a DynamoDB sorokat az S3-as "fájl" formátumra a frontend miatt
         formatted_items = []
         for item in raw_items:
-          
+            ts = float(item.get('timestamp', 0))
             approx_size_bytes = len(json.dumps(item, cls=DecimalEncoder))
             iso_date = datetime.fromtimestamp(ts, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')
             formatted_items.append({

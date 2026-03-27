@@ -101,6 +101,7 @@ def lambda_handler(event, context):
             if ts_seconds > 0:
                 dt_obj = datetime.fromtimestamp(ts_seconds, tz=timezone.utc)
                 valid_date_str = dt_obj.strftime('%Y-%m-%dT%H:%M:%S.000Z')
+                valid_date_str = item.get('received_at', '2026-01-01T00:00:00.000Z')
             else:
                 valid_date_str = item.get('received_at', '2026-01-01T00:00:00.000Z')
             formatted_items.append({

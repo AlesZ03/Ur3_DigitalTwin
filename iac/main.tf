@@ -137,6 +137,7 @@ resource "aws_iam_role_policy" "lambda_sqs_send_policy" {
 terraform {
   backend "s3" {
 
+    use_lockfile = true
 
   }
 }

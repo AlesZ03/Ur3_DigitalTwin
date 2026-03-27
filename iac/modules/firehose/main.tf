@@ -64,11 +64,7 @@ resource "aws_kinesis_firehose_delivery_stream" "telemetry_stream" {
     error_output_prefix = "errors/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd/}"
 
     file_extension = ".json"
-    processing_configuration {
-      enabled = true
-
-
-    }
+   
   }
 }
 

@@ -1,9 +1,9 @@
 
 resource "aws_s3_bucket" "terraform_state" {
-  bucket = "terraform-state-${random_id.suffix.hex}" 
-  
+  bucket = "terraform-state-${random_id.suffix.hex}"
+
   lifecycle {
-    prevent_destroy = true 
+    prevent_destroy = true
   }
 }
 
@@ -50,7 +50,7 @@ resource "aws_iam_role" "github_actions_role" {
         },
         Condition = {
           StringLike = {
-            "token.actions.githubusercontent.com:sub": "repo:${var.github_repo}:*"
+            "token.actions.githubusercontent.com:sub" : "repo:${var.github_repo}:*"
           }
         }
       }

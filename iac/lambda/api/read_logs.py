@@ -97,17 +97,20 @@ def lambda_handler(event, context):
         for item in raw_items:
             ts = float(item.get('timestamp', 0))
             approx_size_bytes = len(json.dumps(item, cls=DecimalEncoder))
-            iso_date = datetime.fromtimestamp(ts, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')
-            formatted_items.append({
-                "key": f"dynamodb-record/{item.get('message_id', 'unknown')}", 
-                "size": approx_size_bytes,                                    
-                "last_modified": iso_date,                  
-                "message_id": item.get('message_id', ''),
-                "timestamp": item.get('timestamp', 0),
-                "data": {                                                     
-                    "joint_positions": item.get('joint_positions', []),
-                    "timestamp": item.get('timestamp', 0)
-                }
+            dt_obj = datetime.fromtimestamp(ts, tz=timezone.utc)
+            formatted_items.append({{
+                "message_id": item.get('message_id', 'unknown'),
+                "timestamp": dt_obj.strftime('%Y-%m-%d_%H-%M-%S'), 
+                "received_at": dt_obj.isoformat(),
+                "data": {
+                    "joint_positions": [float(p) for p in item.get('joint_positions', [])],
+                    "timestamp": ts
+                },
+      
+                "last_modified": dt_obj.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+                "key": f"dynamodb-record/{item.get('message_id')}",
+                "size": approx_size_bytes
+            }
             })
 
         logger.info(f"Sikeresen lekérve és formázva {len(formatted_items)} rekord a DynamoDB-ből.")

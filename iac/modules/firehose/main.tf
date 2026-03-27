@@ -1,6 +1,6 @@
 # --- S3 Bucket az adatok tárolására ---
 resource "aws_s3_bucket" "telemetry_bucket" {
-  bucket        = "${var.project_name}-telemetry-storage-${var.account_id}"
+  bucket        = "${lower(replace(var.project_name, "_", "-"))}-telemetry-storage-${var.account_id}"
   force_destroy = true
 
   tags = var.tags

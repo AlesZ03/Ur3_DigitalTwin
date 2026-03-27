@@ -36,6 +36,10 @@ variable "s3_bucket_name" {
   default     = null
 
 }
+variable "telemetry_table_name" {
+  description = "A DynamoDB telemetria tábla neve"
+  type        = string
+}
 variable "lambda_execution_role_arn" {
   description = "Lambda függvény végrehajtási szerepkör ARN-je"
   type        = string

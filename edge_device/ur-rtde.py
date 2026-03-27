@@ -8,6 +8,8 @@ import os
 import ssl
 import boto3
 import paho.mqtt.client as mqtt
+import uuid 
+from datetime import datetime, timezone
 from rtde_control import RTDEControlInterface as RTDEControl
 from rtde_receive import RTDEReceiveInterface as RTDEReceive
 
@@ -24,7 +26,7 @@ AWS_IOT_ENDPOINT = "a13j85r7ze62nv-ats.iot.us-east-1.amazonaws.com"
 CLIENT_ID = "UR3-Robot-001" 
 IOT_SHADOW_UPDATE_TOPIC = f"$aws/things/{CLIENT_ID}/shadow/update"
 
-
+IOT_TELEMETRY_TOPIC = "ur3/logs"
 IOT_COMMAND_TOPIC = "ur3/commands"
 
 # Tanúsítványok 
@@ -54,7 +56,7 @@ def setup_logging():
 
 # --- Adatküldő szál (telemetria) ---
 def data_sender(rtde_r, mqtt_client):
-    sqs = boto3.client('sqs', region_name=AWS_REGION)
+    #sqs = boto3.client('sqs', region_name=AWS_REGION)
     logging.info("Adatküldő szál (telemetria) elindult.")
     while not stop_event.is_set():
         try:
@@ -63,15 +65,27 @@ def data_sender(rtde_r, mqtt_client):
                 logging.warning("Nem sikerült lekérni a robot pozícióját.")
                 time.sleep(1)
                 continue
+            current_timestamp = time.time()
 
-            log_payload_dict = {
-                "joint_positions": [round(p, 4) for p in joint_positions],
-                "timestamp": time.time()
+            
+            telemetry_payload = {
+                "message_id": str(uuid.uuid4()),
+                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S"),
+                "received_at": datetime.now(timezone.utc).isoformat(),
+                "data": {
+                    "joint_positions": [round(p, 4) for p in joint_positions],
+                    "timestamp": current_timestamp
+                }
             }
+            telemetry_json = json.dumps(telemetry_payload)
+           
 
             shadow_payload_dict = {
                 "state": {
-                    "reported": log_payload_dict
+                    "reported": {
+                        "joint_positions": [round(p, 4) for p in joint_positions],
+                        "timestamp": current_timestamp
+                    }
                 }
             }
             shadow_payload_json = json.dumps(shadow_payload_dict)
@@ -81,11 +95,16 @@ def data_sender(rtde_r, mqtt_client):
                     mqtt_client.publish(topic=IOT_SHADOW_UPDATE_TOPIC, payload=shadow_payload_json, qos=1)
             except Exception as mqtt_e:
                 logging.error(f"Hiba az MQTT publikálás során: {mqtt_e}")
-
             try:
-                sqs.send_message(QueueUrl=LOG_QUEUE_URL, MessageBody=json.dumps(log_payload_dict))
-            except Exception as sqs_e:
-                logging.error(f"Hiba az SQS üzenetküldés során: {sqs_e}")
+                if mqtt_client and mqtt_client.is_connected():
+                    mqtt_client.publish(topic=IOT_TELEMETRY_TOPIC, payload=telemetry_json, qos=1)
+            except Exception as mqtt_e:
+                logging.error(f"Hiba az MQTT telemetria publikálás során: {mqtt_e}")
+            
+            # try:
+            #     sqs.send_message(QueueUrl=LOG_QUEUE_URL, MessageBody=json.dumps(log_payload_dict))
+            # except Exception as sqs_e:
+            #     logging.error(f"Hiba az SQS üzenetküldés során: {sqs_e}")
 
             time.sleep(0.1)
         except Exception as e:

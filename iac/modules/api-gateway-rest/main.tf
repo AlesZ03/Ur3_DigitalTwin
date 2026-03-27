@@ -34,14 +34,13 @@ resource "aws_api_gateway_method" "get_logs" {
   authorization = "NONE"
 }
 
-# Lambda integration
 resource "aws_api_gateway_integration" "get_logs_lambda" {
   rest_api_id             = aws_api_gateway_rest_api.api.id
   resource_id             = aws_api_gateway_resource.logs.id
   http_method             = aws_api_gateway_method.get_logs.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.s3_read_logs.invoke_arn
+  uri                     = aws_lambda_function.read_logs.invoke_arn
 }
 
 # OPTIONS method for CORS
@@ -275,12 +274,13 @@ resource "aws_api_gateway_stage" "stage" {
 }
 
 # Lambda permission for logs endpoint
+
 resource "aws_lambda_permission" "api_gateway_logs" {
   statement_id  = "AllowAPIGatewayInvokeLogs"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.s3_read_logs.function_name # This is for the logs lambda
+  function_name = aws_lambda_function.read_logs.function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*" # Allow all methods on all paths for this API
+  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*"
 }
 
 # Lambda permission for command endpoint (POST /command and GET /command/quick)
@@ -292,9 +292,9 @@ resource "aws_lambda_permission" "api_gateway_command_lambda" {
   source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*" # Allow all methods on all paths for this API
 }
 
-data "archive_file" "s3_read_lambda" {
+data "archive_file" "read_logs_lambda" {
   type        = "zip"
-  output_path = "${path.root}/lambda-dist/s3-read-logs.zip"
+  output_path = "${path.root}/lambda-dist/read-logs.zip"
   source {
     content  = file("${path.root}/lambda/api/read_logs.py")
     filename = "index.py"
@@ -310,22 +310,25 @@ data "archive_file" "command_lambda" {
   }
 }
 
-
-resource "aws_lambda_function" "s3_read_logs" {
-  filename         = data.archive_file.s3_read_lambda.output_path
+resource "aws_lambda_function" "read_logs" {
+  filename         = data.archive_file.read_logs_lambda.output_path
   function_name    = "${var.api_name}-read-logs"
   role             = var.lambda_execution_role_arn
   handler          = "index.lambda_handler"
   runtime          = "python3.11"
   timeout          = 30
   memory_size      = 512
-  source_code_hash = data.archive_file.s3_read_lambda.output_base64sha256
-  environment { variables = { S3_BUCKET_NAME = var.s3_bucket_name } }
+  source_code_hash = data.archive_file.read_logs_lambda.output_base64sha256
+
+  environment {
+    variables = {
+      TABLE_NAME = var.telemetry_table_name
+    }
+  }
   tags = var.tags
 }
-
-resource "aws_cloudwatch_log_group" "s3_read_logs_lambda" {
-  name              = "/aws/lambda/${aws_lambda_function.s3_read_logs.function_name}"
+resource "aws_cloudwatch_log_group" "read_logs_lambda_log" {
+  name              = "/aws/lambda/${aws_lambda_function.read_logs.function_name}"
   retention_in_days = 7
   tags              = var.tags
 }

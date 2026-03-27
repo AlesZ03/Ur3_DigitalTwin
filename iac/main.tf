@@ -90,6 +90,26 @@ resource "aws_iam_role_policy" "lambda_iot_and_messaging_policy" {
     ]
   })
 }
+# Policy for DynamoDB read access (for the /logs API endpoint)
+resource "aws_iam_role_policy" "lambda_dynamodb_read_policy" {
+  name = "LambdaAPIDynamoDBReadPolicy"
+  role = aws_iam_role.lambda_execution_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:Query",
+          "dynamodb:Scan"
+        ]
+
+        Resource = "arn:aws:dynamodb:*:*:table/*telemetry*"
+      }
+    ]
+  })
+}
 
 # Policy for S3 read access (for the /logs API endpoint)
 resource "aws_iam_role_policy" "lambda_s3_read_policy" {
@@ -377,8 +397,8 @@ module "ur3_api_gateway" {
   lambda_execution_role_arn = aws_iam_role.lambda_execution_role.arn
   s3_bucket_name            = module.s3_robot_data.bucket_name
   command_queue_url         = module.cloud_to_device_queue.queue_url
-
-  tags = var.common_tags
+  telemetry_table_name      = module.dynamodb_storage.dynamodb_table_name
+  tags                      = var.common_tags
 }
 ######################################################################################################################
 #                                     Amplify configuration                                                          #

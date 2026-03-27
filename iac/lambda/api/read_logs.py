@@ -99,9 +99,10 @@ def lambda_handler(event, context):
             approx_size_bytes = len(json.dumps(item, cls=DecimalEncoder))
             ts_seconds = float(item.get('timestamp', 0))
             if ts_seconds > 0:
-                valid_date_str = datetime.fromtimestamp(ts_seconds, tz=timezone.utc).isoformat()
+                dt_obj = datetime.fromtimestamp(ts_seconds, tz=timezone.utc)
+                valid_date_str = dt_obj.strftime('%Y-%m-%dT%H:%M:%S.000Z')
             else:
-                valid_date_str = item.get('received_at', '') 
+                valid_date_str = item.get('received_at', '2026-01-01T00:00:00.000Z')
             formatted_items.append({
                 "key": f"dynamodb-record/{item.get('message_id', 'unknown')}", 
                 "size": approx_size_bytes,                                    

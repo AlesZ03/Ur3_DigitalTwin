@@ -170,7 +170,7 @@ module "iot_core" {
 module "dynamodb_storage" {
   source             = "./modules/dynamodb"
   project_name       = var.project_name
-  lambda_source_path = "lambda/writer.py"
+  lambda_source_path = "lambda/dynamodb/writer.py"
   tags               = var.common_tags
 }
 ########################################################################################################################

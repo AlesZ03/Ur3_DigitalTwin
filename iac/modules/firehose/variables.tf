@@ -12,7 +12,3 @@ variable "tags" {
   default = {}
 }
 
-variable "lambda_writer_arn" {
-  type        = string
-  description = "A Timestream író Lambda ARN-je"
-}

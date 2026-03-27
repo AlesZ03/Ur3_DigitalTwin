@@ -169,11 +169,11 @@ module "iot_core" {
 
 
 module "firehose_ingestion" {
-  source            = "./modules/firehose"
-  project_name      = var.project_name
-  account_id        = data.aws_caller_identity.current.account_id
-  aws_region        = var.aws_region
-  lambda_writer_arn = module.timestream_db.writer_lambda_arn
+  source       = "./modules/firehose"
+  project_name = var.project_name
+  account_id   = data.aws_caller_identity.current.account_id
+  aws_region   = var.aws_region
+
 }
 ########################################################################################################################
 #                                     SQS-terraform conf                                                               #

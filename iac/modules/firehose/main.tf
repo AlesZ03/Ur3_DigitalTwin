@@ -67,21 +67,7 @@ resource "aws_kinesis_firehose_delivery_stream" "telemetry_stream" {
     processing_configuration {
       enabled = true
 
-      processors {
-        type = "Lambda"
-        parameters {
-          parameter_name  = "LambdaArn"
-          parameter_value = "${var.lambda_writer_arn}:$LATEST"
-        }
-        parameters {
-          parameter_name  = "BufferSizeInMBs"
-          parameter_value = "1"
-        }
-        parameters {
-          parameter_name  = "BufferIntervalInSeconds"
-          parameter_value = "60"
-        }
-      }
+
     }
   }
 }

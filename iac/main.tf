@@ -167,6 +167,7 @@ module "iot_core" {
 ########################################################################################################################
 
 
+
 module "firehose_ingestion" {
   source            = "./modules/firehose"
   project_name      = var.project_name

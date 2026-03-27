@@ -75,7 +75,7 @@ data "archive_file" "dynamo_writer_zip" {
   output_path = "${path.root}/lambda-dist/dynamo_writer.zip"
   source {
     content  = file("${path.root}/${var.lambda_source_path}")
-    filename = "index.py" 
+    filename = "index.py"
   }
 }
 
@@ -83,10 +83,10 @@ resource "aws_lambda_function" "dynamo_writer" {
   function_name    = "${var.project_name}-dynamo-writer"
   role             = aws_iam_role.lambda_exec_role.arn
   handler          = "index.handler"
-  runtime          = "python3.12" 
+  runtime          = "python3.12"
   filename         = data.archive_file.dynamo_writer_zip.output_path
   source_code_hash = data.archive_file.dynamo_writer_zip.output_base64sha256
-  timeout          = 60 
+  timeout          = 60
 
   environment {
     variables = {

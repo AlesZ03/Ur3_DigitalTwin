@@ -170,7 +170,7 @@ module "iot_core" {
 module "dynamodb_storage" {
   source             = "./modules/dynamodb"
   project_name       = var.project_name
-  lambda_source_path = "lambda/writer.py" 
+  lambda_source_path = "lambda/writer.py"
   tags               = var.common_tags
 }
 ########################################################################################################################
@@ -180,12 +180,12 @@ module "dynamodb_storage" {
 
 
 module "firehose_ingestion" {
-  source       = "./modules/firehose"
-  project_name = var.project_name
-  account_id   = data.aws_caller_identity.current.account_id
-  aws_region   = var.aws_region
+  source            = "./modules/firehose"
+  project_name      = var.project_name
+  account_id        = data.aws_caller_identity.current.account_id
+  aws_region        = var.aws_region
   lambda_writer_arn = module.dynamodb_storage.writer_lambda_arn
-  tags = var.common_tags
+  tags              = var.common_tags
 
 }
 ########################################################################################################################

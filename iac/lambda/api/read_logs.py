@@ -127,7 +127,7 @@ def lambda_handler(event, context):
                         first_json_match = re.search(r'\{.*?\}(?=\s*\{|\s*$)', file_content)
                         
                         if first_json_match:
-                            first_item = json.loads(first_json_match.group(0))
+                            first_item = json.loads(first_json_match.group(0), parse_float=Decimal)
                             
                             # JAVÍTÁS: A belső (szám) timestampet olvassuk ki!
                             if 'data' in first_item and 'timestamp' in first_item['data']:
@@ -173,7 +173,7 @@ def lambda_handler(event, context):
                             json_objects = re.findall(r'\{.*?\}(?=\s*\{|\s*$)', file_content)
                             for json_str in json_objects:
                                 try:
-                                    item_data = json.loads(json_str)
+                                    item_data = json.loads(json_str, parse_float=Decimal)
                                     
                                     # JAVÍTÁS: DynamoDB Séma illesztés (ETL)
                                     item_data['robot_id'] = 'ur3' 

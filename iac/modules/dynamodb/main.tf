@@ -14,6 +14,10 @@ resource "aws_dynamodb_table" "telemetry_db" {
     name = "timestamp"
     type = "N"
   }
+  ttl {
+    attribute_name = "expire_at"
+    enabled        = true
+  }
 
   tags = var.tags
 }

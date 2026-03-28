@@ -320,6 +320,7 @@ resource "aws_lambda_function" "read_logs" {
   memory_size      = 512
   source_code_hash = data.archive_file.read_logs_lambda.output_base64sha256
 
+
   environment {
     variables = {
       TABLE_NAME = var.telemetry_table_name

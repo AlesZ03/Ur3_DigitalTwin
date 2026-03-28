@@ -129,8 +129,8 @@ resource "aws_iam_role_policy" "lambda_s3_read_policy" {
         Resource = [
           module.s3_robot_data.bucket_arn,
           "${module.s3_robot_data.bucket_arn}/*",
-          module.s3_firehose_logs.bucket_arn,
-          "${module.s3_firehose_logs.bucket_arn}/*"
+          module.firehose_ingestion.bucket_arn,
+          "${module.firehose_ingestion.bucket_arn}/*"
         ]
       }
     ]

@@ -85,6 +85,7 @@ def lambda_handler(event, context):
             'KeyConditionExpression': key_condition,
             'ScanIndexForward': not is_desc, 
         }
+        
         if limit:
             query_kwargs['Limit'] = limit
 

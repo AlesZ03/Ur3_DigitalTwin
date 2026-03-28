@@ -215,27 +215,27 @@ module "firehose_ingestion" {
 
 
 #INCOMING: Fizikai eszköz → Cloud (adatok fogadása)
-# module "device_to_cloud_queue" {
-#   source = "./modules/sqs"
+module "device_to_cloud_queue" {
+  source = "./modules/sqs"
 
-#   queue_name                 = "${var.project_name}-device-to-cloud"
-#   visibility_timeout_seconds = 300
-#   message_retention_seconds  = 1209600 // 14 nap
-#   max_message_size           = 262144  // 256 KB
-#   delay_seconds              = 0
-#   receive_wait_time_seconds  = 10 // Long polling
+  queue_name                 = "${var.project_name}-device-to-cloud"
+  visibility_timeout_seconds = 300
+  message_retention_seconds  = 1209600 // 14 nap
+  max_message_size           = 262144  // 256 KB
+  delay_seconds              = 0
+  receive_wait_time_seconds  = 10 // Long polling
 
-#   enable_dlq        = true
-#   max_receive_count = 3
+  enable_dlq        = true
+  max_receive_count = 3
 
-#   tags = {
-#     Project     = var.common_tags["Project"]
-#     Environment = var.common_tags["Environment"]
-#     ManagedBy   = var.common_tags["ManagedBy"]
-#     Direction   = "Inbound"
-#     Purpose     = "Device telemetry and status"
-#   }
-# }
+  tags = {
+    Project     = var.common_tags["Project"]
+    Environment = var.common_tags["Environment"]
+    ManagedBy   = var.common_tags["ManagedBy"]
+    Direction   = "Inbound"
+    Purpose     = "Device telemetry and status"
+  }
+}
 
 
 // OUTGOING: Cloud → Fizikai eszköz (parancsok visszaküldése)

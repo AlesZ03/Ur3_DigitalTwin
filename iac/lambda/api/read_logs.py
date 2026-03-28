@@ -155,7 +155,7 @@ def lambda_handler(event, context):
             logger.info(f"TELJES NAP betöltése indul az S3-ból a gyorsítótárba: {date_str}...")
             try:
                 rehydrated_items = []
-                s3_prefix = date_str.replace('-', '/') + '/' 
+                s3_prefix = f"data/{date_str.replace('-', '/') + '/'}" 
                 
                 # Paginator kell, mert egy nap alatt több mint 1000 fájl is lehet az S3-ban!
                 paginator = s3_client.get_paginator('list_objects_v2')

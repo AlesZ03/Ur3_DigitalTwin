@@ -103,7 +103,9 @@ resource "aws_iam_role_policy" "lambda_dynamodb_read_policy" {
         Effect = "Allow"
         Action = [
           "dynamodb:Query",
-          "dynamodb:Scan"
+          "dynamodb:Scan",
+          "dynamodb:BatchWriteItem",
+          "dynamodb:PutItem"
         ]
 
         Resource = "arn:aws:dynamodb:*:*:table/*telemetry*"

@@ -36,6 +36,12 @@ variable "s3_bucket_name" {
   default     = null
 
 }
+variable "firehose_s3_bucket_name" {
+  description = "S3 bucket neve(firehose)"
+  type        = string
+  default     = null
+
+}
 variable "telemetry_table_name" {
   description = "A DynamoDB telemetria tábla neve"
   type        = string

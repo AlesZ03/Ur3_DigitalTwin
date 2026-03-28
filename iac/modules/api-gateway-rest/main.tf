@@ -324,7 +324,8 @@ resource "aws_lambda_function" "read_logs" {
 
   environment {
     variables = {
-      TABLE_NAME = var.telemetry_table_name
+      TABLE_NAME  = var.telemetry_table_name
+      BUCKET_NAME = var.firehose_s3_bucket_name
     }
   }
   tags = var.tags

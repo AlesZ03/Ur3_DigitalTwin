@@ -128,7 +128,9 @@ resource "aws_iam_role_policy" "lambda_s3_read_policy" {
         ]
         Resource = [
           module.s3_robot_data.bucket_arn,
-          "${module.s3_robot_data.bucket_arn}/*"
+          "${module.s3_robot_data.bucket_arn}/*",
+          module.s3_firehose_logs.bucket_arn,
+          "${module.s3_firehose_logs.bucket_arn}/*"
         ]
       }
     ]
@@ -207,6 +209,7 @@ module "firehose_ingestion" {
   aws_region        = var.aws_region
   lambda_writer_arn = module.dynamodb_storage.writer_lambda_arn
   tags              = var.common_tags
+
 
 }
 ########################################################################################################################
@@ -401,6 +404,7 @@ module "ur3_api_gateway" {
   command_queue_url         = module.cloud_to_device_queue.queue_url
   telemetry_table_name      = module.dynamodb_storage.dynamodb_table_name
   tags                      = var.common_tags
+  firehose_s3_bucket_name   = module.firehose_ingestion.bucket_name
 }
 ######################################################################################################################
 #                                     Amplify configuration                                                          #

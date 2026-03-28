@@ -129,7 +129,6 @@ def lambda_handler(event, context):
                         if first_json_match:
                             first_item = json.loads(first_json_match.group(0), parse_float=Decimal)
                             
-                            # JAVÍTÁS: A belső (szám) timestampet olvassuk ki!
                             if 'data' in first_item and 'timestamp' in first_item['data']:
                                 oldest_s3_ts = float(first_item['data']['timestamp'])
                             else:
@@ -154,6 +153,7 @@ def lambda_handler(event, context):
                     logger.error(f"Hiba az S3 ellenőrzés során: {e}")
 
         # 3. TELJES NAP LETÖLTÉSE ÉS CACHE-ELÉSE
+       
         if needs_rehydration:
             logger.info(f"TELJES NAP betöltése indul az S3-ból a gyorsítótárba: {date_str}...")
             try:
@@ -174,15 +174,28 @@ def lambda_handler(event, context):
                             for json_str in json_objects:
                                 try:
                                     item_data = json.loads(json_str, parse_float=Decimal)
-                                    
-                                    # JAVÍTÁS: DynamoDB Séma illesztés (ETL)
                                     item_data['robot_id'] = 'ur3' 
                                     
                                     if 'data' in item_data and 'timestamp' in item_data['data']:
                                         item_data['timestamp'] = Decimal(str(item_data['data']['timestamp']))
                                     else:
                                         item_data['timestamp'] = Decimal(str(item_data.get('timestamp', 0)))
-                                        
+
+                                  
+                                    raw_joints = item_data.get('data', {}).get('joint_positions', item_data.get('joint_positions', []))
+                                    
+
+                                    import math
+                                    if 'corrected_joints' not in item_data and isinstance(raw_joints, list) and len(raw_joints) == 6:
+                                        item_data['corrected_joints'] = [
+                                            Decimal(str(raw_joints[0])),
+                                            Decimal(str(float(raw_joints[1]) + (math.pi/2))),
+                                            Decimal(str(raw_joints[2])),
+                                            Decimal(str(float(raw_joints[3]) + (math.pi/2))),
+                                            Decimal(str(float(raw_joints[4]) * -1)),
+                                            Decimal(str(raw_joints[5]))
+                                        ]
+
                                     rehydrated_items.append(item_data)
                                 except Exception as e:
                                     logger.error(f"Hiba JSON olvasáskor: {e}. Tartalom: {json_str[:50]}...")
@@ -213,6 +226,11 @@ def lambda_handler(event, context):
             ts = float(item.get('timestamp', 0))
             approx_size_bytes = len(json.dumps(item, cls=DecimalEncoder))
             dt_obj = datetime.fromtimestamp(ts, tz=timezone.utc)
+            
+         
+            raw_joints = item.get('joint_positions', [])
+            corrected_joints = item.get('corrected_joints', [])
+
             formatted_items.append({
                 "key": f"dynamodb-record/{item.get('message_id', 'unknown')}", 
                 "size": approx_size_bytes,                                                     
@@ -220,7 +238,8 @@ def lambda_handler(event, context):
                 "timestamp": dt_obj.strftime('%Y-%m-%d_%H-%M-%S'), 
                 "received_at": item.get('received_at', dt_obj.isoformat()),
                 "data": {                                                     
-                    "joint_positions": item.get('data', {}).get('joint_positions', []) if 'data' in item else item.get('joint_positions', []),
+                    "joint_positions": raw_joints,               
+                    "corrected_joints": corrected_joints,
                     "timestamp": ts
                 }
             })

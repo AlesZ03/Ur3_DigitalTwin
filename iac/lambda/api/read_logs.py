@@ -2,12 +2,11 @@ import json
 import boto3
 import os
 import logging
-import re  # Szükséges a Firehose JSON daraboláshoz
+import re
 from datetime import datetime, timezone
 from boto3.dynamodb.conditions import Key
 from decimal import Decimal
 
-# Logging beállítása
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -18,14 +17,12 @@ TABLE_NAME = os.environ.get('TABLE_NAME')
 BUCKET_NAME = os.environ.get('BUCKET_NAME')
 table = dynamodb.Table(TABLE_NAME) if TABLE_NAME else None
 
-# --- CORS Fejlécek ---
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'
 }
 
-# --- Egyedi JSON Encoder a DynamoDB miatt ---
 class DecimalEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, Decimal):
@@ -35,7 +32,6 @@ class DecimalEncoder(json.JSONEncoder):
         return super(DecimalEncoder, self).default(obj)
 
 def create_response(status_code, body):
-    """Segédfüggvény a konzisztens API Gateway válaszokhoz."""
     return {
         'statusCode': status_code,
         'headers': CORS_HEADERS,
@@ -45,7 +41,6 @@ def create_response(status_code, body):
 def lambda_handler(event, context):
     logger.info(f"Esemény fogadva: {json.dumps(event)}")
 
-    # --- CORS Preflight ---
     http_method = event.get('httpMethod', 'GET').upper()
     if http_method == 'OPTIONS':
         return create_response(200, {"message": "CORS preflight check sikeres"})
@@ -67,7 +62,6 @@ def lambda_handler(event, context):
         
         key_condition = Key('robot_id').eq('ur3')
 
-        # Dátum és idő konvertálása
         start_ts = 0
         end_ts = 0
         if date_str and start_time_str and end_time_str:
@@ -103,7 +97,6 @@ def lambda_handler(event, context):
                 break
                 
             if len(raw_items) >= 10000:
-                logger.warning("Elértük a 10 000 elemes biztonsági korlátot a lekérdezésnél!")
                 break
 
             if 'LastEvaluatedKey' in response:
@@ -119,15 +112,11 @@ def lambda_handler(event, context):
             oldest_db_ts = float(raw_items[-1].get('timestamp', 0)) if (is_desc and raw_items) else (float(raw_items[0].get('timestamp', 0)) if raw_items else None)
             TOLERANCE_SECONDS = 300 
             
-            # Ha üres, vagy gyanúsan későn kezdődik az adatbázis tartalma
             if not raw_items or oldest_db_ts > (start_ts + TOLERANCE_SECONDS):
                 logger.info("Hiányos adatokat sejtünk a DynamoDB-ben. Irány az S3!")
                 
                 try:
-                    # JAVÍTÁS: A Firehose 'data/' mappájában keresünk
                     s3_prefix = f"data/{date_str.replace('-', '/')}/"
-                    
-                    # Először csak a legelső fájlt kérjük le, hogy lássuk, volt-e egyáltalán adat aznap!
                     s3_first_check = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=s3_prefix, MaxKeys=1)
                     
                     if 'Contents' in s3_first_check and len(s3_first_check['Contents']) > 0:
@@ -135,12 +124,16 @@ def lambda_handler(event, context):
                         file_obj = s3_client.get_object(Bucket=BUCKET_NAME, Key=first_file_key)
                         file_content = file_obj['Body'].read().decode('utf-8')
                         
-                        # JAVÍTÁS: Regex a Firehose egybeömlesztett JSON fájljaihoz
                         first_json_match = re.search(r'\{.*?\}(?=\s*\{|\s*$)', file_content)
                         
                         if first_json_match:
                             first_item = json.loads(first_json_match.group(0))
-                            oldest_s3_ts = float(first_item.get('timestamp', 0))
+                            
+                            # JAVÍTÁS: A belső (szám) timestampet olvassuk ki!
+                            if 'data' in first_item and 'timestamp' in first_item['data']:
+                                oldest_s3_ts = float(first_item['data']['timestamp'])
+                            else:
+                                oldest_s3_ts = float(first_item.get('timestamp', 0)) 
                             
                             if not raw_items:
                                 if oldest_s3_ts <= end_ts:
@@ -165,10 +158,8 @@ def lambda_handler(event, context):
             logger.info(f"TELJES NAP betöltése indul az S3-ból a gyorsítótárba: {date_str}...")
             try:
                 rehydrated_items = []
-                # JAVÍTÁS: A Firehose 'data/' mappájában keresünk
                 s3_prefix = f"data/{date_str.replace('-', '/')}/"
                 
-                # Paginator kell, mert egy nap alatt több mint 1000 fájl is lehet az S3-ban!
                 paginator = s3_client.get_paginator('list_objects_v2')
                 pages = paginator.paginate(Bucket=BUCKET_NAME, Prefix=s3_prefix)
                 
@@ -179,12 +170,21 @@ def lambda_handler(event, context):
                             file_obj = s3_client.get_object(Bucket=BUCKET_NAME, Key=file_key)
                             file_content = file_obj['Body'].read().decode('utf-8')
                             
-                            # JAVÍTÁS: Regex darabolás az összes fájlra
                             json_objects = re.findall(r'\{.*?\}(?=\s*\{|\s*$)', file_content)
                             for json_str in json_objects:
                                 try:
-                                    rehydrated_items.append(json.loads(json_str))
-                                except json.JSONDecodeError as e:
+                                    item_data = json.loads(json_str)
+                                    
+                                    # JAVÍTÁS: DynamoDB Séma illesztés (ETL)
+                                    item_data['robot_id'] = 'ur3' 
+                                    
+                                    if 'data' in item_data and 'timestamp' in item_data['data']:
+                                        item_data['timestamp'] = Decimal(str(item_data['data']['timestamp']))
+                                    else:
+                                        item_data['timestamp'] = Decimal(str(item_data.get('timestamp', 0)))
+                                        
+                                    rehydrated_items.append(item_data)
+                                except Exception as e:
                                     logger.error(f"Hiba JSON olvasáskor: {e}. Tartalom: {json_str[:50]}...")
                 
                 if rehydrated_items:
@@ -198,13 +198,10 @@ def lambda_handler(event, context):
                     
                     logger.info("A teljes nap sikeresen gyorsítótárazva a DynamoDB-ben!")
                     
-                    # SZŰRÉS: Mivel az egész napot letöltöttük, most kiválogatjuk belőle azt,
-                    # amit a frontend éppen most konkrétan kért!
                     raw_items = [
                         item for item in rehydrated_items 
                         if start_ts <= float(item.get('timestamp', 0)) <= end_ts
                     ]
-                    # Rendezzük a megfelelő irányba
                     raw_items.sort(key=lambda x: float(x.get('timestamp', 0)), reverse=is_desc)
                     info_message = "Hiányzó adatok észlelve, a teljes nap visszatöltésre került a gyorsítótárba!"
             except Exception as e:
@@ -221,10 +218,10 @@ def lambda_handler(event, context):
                 "size": approx_size_bytes,                                                     
                 "message_id": item.get('message_id', ''),
                 "timestamp": dt_obj.strftime('%Y-%m-%d_%H-%M-%S'), 
-                "received_at": dt_obj.isoformat(),
+                "received_at": item.get('received_at', dt_obj.isoformat()),
                 "data": {                                                     
-                    "joint_positions": item.get('joint_positions', []),
-                    "timestamp": item.get('timestamp', 0)
+                    "joint_positions": item.get('data', {}).get('joint_positions', []) if 'data' in item else item.get('joint_positions', []),
+                    "timestamp": ts
                 }
             })
 

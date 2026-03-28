@@ -2,6 +2,7 @@ import json
 import boto3
 import os
 import logging
+import re  # Szükséges a Firehose JSON daraboláshoz
 from datetime import datetime, timezone
 from boto3.dynamodb.conditions import Key
 from decimal import Decimal
@@ -123,7 +124,8 @@ def lambda_handler(event, context):
                 logger.info("Hiányos adatokat sejtünk a DynamoDB-ben. Irány az S3!")
                 
                 try:
-                    s3_prefix = date_str.replace('-', '/') + '/' 
+                    # JAVÍTÁS: A Firehose 'data/' mappájában keresünk
+                    s3_prefix = f"data/{date_str.replace('-', '/')}/"
                     
                     # Először csak a legelső fájlt kérjük le, hogy lássuk, volt-e egyáltalán adat aznap!
                     s3_first_check = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=s3_prefix, MaxKeys=1)
@@ -131,19 +133,27 @@ def lambda_handler(event, context):
                     if 'Contents' in s3_first_check and len(s3_first_check['Contents']) > 0:
                         first_file_key = s3_first_check['Contents'][0]['Key']
                         file_obj = s3_client.get_object(Bucket=BUCKET_NAME, Key=first_file_key)
-                        first_line = file_obj['Body'].read().decode('utf-8').strip().split('\n')[0]
-                        oldest_s3_ts = float(json.loads(first_line).get('timestamp', 0))
+                        file_content = file_obj['Body'].read().decode('utf-8')
                         
-                        if not raw_items:
-                            if oldest_s3_ts <= end_ts:
-                                needs_rehydration = True 
+                        # JAVÍTÁS: Regex a Firehose egybeömlesztett JSON fájljaihoz
+                        first_json_match = re.search(r'\{.*?\}(?=\s*\{|\s*$)', file_content)
+                        
+                        if first_json_match:
+                            first_item = json.loads(first_json_match.group(0))
+                            oldest_s3_ts = float(first_item.get('timestamp', 0))
+                            
+                            if not raw_items:
+                                if oldest_s3_ts <= end_ts:
+                                    needs_rehydration = True 
+                                else:
+                                    info_message = "A robot aznap be volt kapcsolva, de a kért időablakban nem mozgott/küldött adatot."
                             else:
-                                info_message = "A robot aznap be volt kapcsolva, de a kért időablakban nem mozgott/küldött adatot."
+                                if oldest_s3_ts < (oldest_db_ts - TOLERANCE_SECONDS):
+                                    needs_rehydration = True 
+                                else:
+                                    info_message = "Minden elérhető adat betöltve. A robot korábban ki volt kapcsolva."
                         else:
-                            if oldest_s3_ts < (oldest_db_ts - TOLERANCE_SECONDS):
-                                needs_rehydration = True 
-                            else:
-                                info_message = "Minden elérhető adat betöltve. A robot korábban ki volt kapcsolva."
+                            logger.error("Nem találtunk érvényes JSON objektumot az első S3 fájlban.")
                     else:
                         info_message = "Ezen a napon a robot egyáltalán nem volt bekapcsolva (S3 vödör üres)."
                         
@@ -155,7 +165,8 @@ def lambda_handler(event, context):
             logger.info(f"TELJES NAP betöltése indul az S3-ból a gyorsítótárba: {date_str}...")
             try:
                 rehydrated_items = []
-                s3_prefix = f"data/{date_str.replace('-', '/') + '/'}" 
+                # JAVÍTÁS: A Firehose 'data/' mappájában keresünk
+                s3_prefix = f"data/{date_str.replace('-', '/')}/"
                 
                 # Paginator kell, mert egy nap alatt több mint 1000 fájl is lehet az S3-ban!
                 paginator = s3_client.get_paginator('list_objects_v2')
@@ -168,9 +179,13 @@ def lambda_handler(event, context):
                             file_obj = s3_client.get_object(Bucket=BUCKET_NAME, Key=file_key)
                             file_content = file_obj['Body'].read().decode('utf-8')
                             
-                            for line in file_content.strip().split('\n'):
-                                if line:
-                                    rehydrated_items.append(json.loads(line))
+                            # JAVÍTÁS: Regex darabolás az összes fájlra
+                            json_objects = re.findall(r'\{.*?\}(?=\s*\{|\s*$)', file_content)
+                            for json_str in json_objects:
+                                try:
+                                    rehydrated_items.append(json.loads(json_str))
+                                except json.JSONDecodeError as e:
+                                    logger.error(f"Hiba JSON olvasáskor: {e}. Tartalom: {json_str[:50]}...")
                 
                 if rehydrated_items:
                     logger.info(f"{len(rehydrated_items)} rekord letöltve a teljes naphoz. Írás a DB-be...")

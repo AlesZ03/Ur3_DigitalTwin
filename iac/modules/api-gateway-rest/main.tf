@@ -310,6 +310,7 @@ data "archive_file" "command_lambda" {
   }
 }
 
+
 resource "aws_lambda_function" "read_logs" {
   filename         = data.archive_file.read_logs_lambda.output_path
   function_name    = "${var.api_name}-read-logs"

@@ -15,6 +15,7 @@ jobs:
   terraform:
     name: "Terraform"
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch'
     env:
       TF_VAR_aws_region: ${{ vars.AWS_REGION }}
       TF_VAR_project_name: "Ur3_DigitalTwin"

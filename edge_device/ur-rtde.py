@@ -16,12 +16,12 @@ from rtde_receive import RTDEReceiveInterface as RTDEReceive
 # --- Konfiguráció ---
 #ROBOT_IP = "192.168.98.6"  
 ROBOT_IP = "172.17.0.2" 
-AWS_REGION = 'us-east-1'
+AWS_REGION = 'eu-central-1'
 
-LOG_QUEUE_URL = 'https://sqs.us-east-1.amazonaws.com/359289023072/Ur3_DigitalTwin-device-to-cloud'     
+LOG_QUEUE_URL = 'https://sqs.eu-central-1.amazonaws.com/359289023072/Ur3_DigitalTwin-device-to-cloud'     
 
 # AWS IoT Core (Paho MQTT)
-AWS_IOT_ENDPOINT = "a13j85r7ze62nv-ats.iot.us-east-1.amazonaws.com" 
+AWS_IOT_ENDPOINT = "a13j85r7ze62nv-ats.iot.eu-central-1.amazonaws.com" 
 CLIENT_ID = "UR3-Robot-001" 
 IOT_SHADOW_UPDATE_TOPIC = f"$aws/things/{CLIENT_ID}/shadow/update"
 
@@ -227,16 +227,11 @@ def main():
                 
                 logging.info(f"Csatlakozás az AWS IoT végponthoz: {AWS_IOT_ENDPOINT}...")
                 mqtt_client.connect(AWS_IOT_ENDPOINT, 8883, 60)
-                
                 mqtt_client.loop_start()
 
-                time.sleep(2)
-                if mqtt_client.is_connected():
-                    logging.info("MQTT kapcsolat sikeresen elindítva.")
-                    break
-                else:
-                    mqtt_client.loop_stop(force=True)
-                    raise ConnectionError("Az MQTT kliens nem csatlakozott a várakozási idő alatt.")
+                break 
+                
+
             except Exception as e:
                 logging.error(f"MQTT csatlakozási hiba: {e}")
                 if i == 4:

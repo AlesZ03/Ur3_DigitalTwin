@@ -26,7 +26,7 @@ variable "environment" {
 variable "project_name" {
   description = "Name of the project"
   type        = string
-  default     = "ur3-digital-twin"
+  default     = "ur3-digital-twin-eu"
 }
 
 variable "alert_email" {

@@ -1,6 +1,6 @@
 
 resource "aws_s3_bucket" "terraform_state" {
-  bucket = "terraform-state-${random_id.suffix.hex}"
+  bucket = "terraform-state-eu-${random_id.suffix.hex}"
 
   lifecycle {
     prevent_destroy = true

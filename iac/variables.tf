@@ -35,7 +35,6 @@ variable "alert_email" {
   description = "Email cím riasztásokhoz (opcionális)"
 }
 
-
 # S3 változók
 variable "s3_bucket_name" {
   description = "Az S3 bucket neve"

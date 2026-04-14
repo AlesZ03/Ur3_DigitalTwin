@@ -341,7 +341,7 @@ resource "aws_lambda_function" "send_command" {
   function_name    = "${var.api_name}-send-command"
   role             = var.lambda_execution_role_arn
   handler          = "index.lambda_handler"
-  runtime          = "python3.11"
+  runtime          = "python3.10"
   timeout          = 30
   source_code_hash = data.archive_file.command_lambda.output_base64sha256
   layers           = [aws_lambda_layer_version.robotics_math_layer.arn]

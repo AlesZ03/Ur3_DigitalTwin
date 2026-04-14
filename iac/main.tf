@@ -27,18 +27,12 @@ data "aws_caller_identity" "current" {}
 
 data "aws_iot_endpoint" "current" {}
 
-
-
 # Random string for resource naming
 resource "random_string" "bucket_suffix" {
   length  = 8
   special = false
   upper   = false
 }
-
-
-
-
 
 # Lambda execution role
 resource "aws_iam_role" "lambda_execution_role" {
@@ -107,14 +101,13 @@ resource "aws_iam_role_policy" "lambda_dynamodb_read_policy" {
           "dynamodb:BatchWriteItem",
           "dynamodb:PutItem"
         ]
-
         Resource = "arn:aws:dynamodb:*:*:table/*telemetry*"
       }
     ]
   })
 }
 
-# Policy for S3 read access (for the /logs API endpoint)
+# Policy for S3 read access (Visszatéve az s3_robot_data bucket is a layerek miatt!)
 resource "aws_iam_role_policy" "lambda_s3_read_policy" {
   name = "LambdaAPIS3ReadPolicy"
   role = aws_iam_role.lambda_execution_role.id
@@ -161,13 +154,9 @@ resource "aws_iam_role_policy" "lambda_sqs_send_policy" {
 ########################################################################################################################
 terraform {
   backend "s3" {
-
     use_lockfile = true
-
   }
 }
-
-
 
 ########################################################################################################################
 #                                     IOT-Core conf                                                                    #
@@ -185,25 +174,21 @@ module "iot_core" {
   appsync_api_url = module.appsync_api.api_url
   appsync_api_id  = module.appsync_api.api_id
   iot_endpoint    = data.aws_iot_endpoint.current.endpoint_address
-
 }
+
 ########################################################################################################################
 #                                     DynamoDB conf                                                                    #
 ########################################################################################################################
-
-
 module "dynamodb_storage" {
   source             = "./modules/dynamodb"
   project_name       = var.project_name
   lambda_source_path = "lambda/dynamodb/writer.py"
   tags               = var.common_tags
 }
+
 ########################################################################################################################
 #                                     Firehose conf                                                                    #
 ########################################################################################################################
-
-
-
 module "firehose_ingestion" {
   source            = "./modules/firehose"
   project_name      = var.project_name
@@ -211,38 +196,11 @@ module "firehose_ingestion" {
   aws_region        = var.aws_region
   lambda_writer_arn = module.dynamodb_storage.writer_lambda_arn
   tags              = var.common_tags
-
-
-}
-########################################################################################################################
-#                                     SQS-terraform conf                                                               #
-########################################################################################################################
-
-
-#INCOMING: Fizikai eszköz → Cloud (adatok fogadása)
-module "device_to_cloud_queue" {
-  source = "./modules/sqs"
-
-  queue_name                 = "${var.project_name}-device-to-cloud"
-  visibility_timeout_seconds = 300
-  message_retention_seconds  = 1209600 // 14 nap
-  max_message_size           = 262144  // 256 KB
-  delay_seconds              = 0
-  receive_wait_time_seconds  = 10 // Long polling
-
-  enable_dlq        = true
-  max_receive_count = 3
-
-  tags = {
-    Project     = var.common_tags["Project"]
-    Environment = var.common_tags["Environment"]
-    ManagedBy   = var.common_tags["ManagedBy"]
-    Direction   = "Inbound"
-    Purpose     = "Device telemetry and status"
-  }
 }
 
-
+########################################################################################################################
+#                                     SQS-terraform conf (Command Queue Only)                                          #
+########################################################################################################################
 // OUTGOING: Cloud → Fizikai eszköz (parancsok visszaküldése)
 module "cloud_to_device_queue" {
   source = "./modules/sqs"
@@ -265,10 +223,12 @@ module "cloud_to_device_queue" {
   }
 }
 
+########################################################################################################################
+#                                     S3 Bucket (Layer / Asset Storage)                                                #
+########################################################################################################################
 module "s3_robot_data" {
   source = "./modules/s3-sqs-data"
 
-  # Automatikusan generált egyedi bucket név
   bucket_name          = "robot-data-storage-eu-${data.aws_caller_identity.current.account_id}"
   versioning_enabled   = var.s3_versioning_enabled
   encryption_algorithm = var.s3_encryption_algorithm
@@ -296,69 +256,24 @@ module "s3_robot_data" {
 }
 
 
-# Lambda modul
-module "lambda_robot_processor" {
-  source = "./modules/lambda-sqs"
-
-  function_name           = var.lambda_function_name
-  lambda_source_file_path = "${path.module}/lambda/sqs/data-sqs.py"
-  lambda_output_zip_path  = "${path.module}/lambda-dist/${var.lambda_function_name}.zip"
-  handler                 = var.lambda_handler
-  runtime                 = var.lambda_runtime
-  timeout                 = var.lambda_timeout
-  memory_size             = var.lambda_memory_size
-
-  # SQS trigger beállítása 
-  sqs_queue_arn       = module.device_to_cloud_queue.queue_arn
-  sqs_batch_size      = var.lambda_sqs_batch_size
-  sqs_trigger_enabled = var.lambda_sqs_trigger_enabled
-  maximum_concurrency = var.lambda_max_concurrency
-
-  # S3 konfiguráció 
-  s3_bucket_name = module.s3_robot_data.bucket_name
-  s3_bucket_arn  = module.s3_robot_data.bucket_arn
-
-  environment_variables = var.lambda_environment_variables
-  log_retention_days    = var.lambda_log_retention_days
-
-  tags = var.common_tags
-}
-module "backend_monitoring" {
-  source = "./modules/monitoring"
-
-  project_name = var.project_name
-  alert_email  = var.alert_email
-
-  device_to_cloud_queue_arn = module.device_to_cloud_queue.queue_arn
-  cloud_to_device_queue_arn = module.cloud_to_device_queue.queue_arn
-
-
-  device_to_cloud_queue_name = module.device_to_cloud_queue.queue_name
-  cloud_to_device_queue_name = module.cloud_to_device_queue.queue_name
-}
 ######################################################################################################################
 #                                     SQS to IoT Core Bridge Lambda                                                  #
 ######################################################################################################################
-
 module "lambda_iot_bridge" {
   source = "./modules/lambda-bridge-sqs-iot"
 
   bridge_function_name = "${var.project_name}-sqs-to-iot"
-
-
-  sqs_queue_arn = module.cloud_to_device_queue.queue_arn
-
-  iot_endpoint = data.aws_iot_endpoint.current.endpoint_address
-  iot_topic    = "ur3/commands"
-
+  sqs_queue_arn        = module.cloud_to_device_queue.queue_arn
+  iot_endpoint         = data.aws_iot_endpoint.current.endpoint_address
+  iot_topic            = "ur3/commands"
 
   bridge_lambda_source_file_path = "${path.module}/lambda/sqs/iot-core-sqs.py"
   bridge_lambda_output_zip_path  = "${path.module}/lambda-dist/bridge.zip"
 }
+
 ######################################################################################################################
 #                                     AppSync for Real-time Data (Modular)                                           #
 ######################################################################################################################
-
 module "appsync_api" {
   source = "./modules/app-sync"
 
@@ -368,30 +283,11 @@ module "appsync_api" {
   schema_path           = "${path.module}/modules/app-sync/schema.graphql"
   tags                  = var.common_tags
   iot_bridge_lambda_arn = module.iot_core.lambda_arn
-
-}
-
-
-# ######################################################################################################################
-# #                                     UR RTDE Controller Lambda with Layer                                             #
-# ######################################################################################################################
-
-module "lambda_backend" {
-  source = "./modules/lambda-backend"
-
-  project_name                     = var.project_name
-  common_tags                      = var.common_tags
-  ur_rtde_layer_zip_path           = var.ur_rtde_layer_zip_path
-  ur_controller_lambda_source_path = var.ur_controller_lambda_source_path
-
-  cloud_to_device_queue_arn = module.cloud_to_device_queue.queue_arn
-  cloud_to_device_queue_url = module.cloud_to_device_queue.queue_url
 }
 
 ######################################################################################################################
 #                                     API Gateway (REST API)                                                         #
 ######################################################################################################################
-
 # --- API Gateway REST API ---
 module "ur3_api_gateway" {
   source = "./modules/api-gateway-rest"
@@ -402,6 +298,8 @@ module "ur3_api_gateway" {
   project_name    = var.project_name
 
   lambda_execution_role_arn = aws_iam_role.lambda_execution_role.arn
+  
+  # Visszatéve a hivatkozás, nehogy a belső változókon elhasaljon a Terraform!
   s3_bucket_name            = module.s3_robot_data.bucket_name
 
   command_queue_url       = module.cloud_to_device_queue.queue_url
@@ -409,6 +307,7 @@ module "ur3_api_gateway" {
   tags                    = var.common_tags
   firehose_s3_bucket_name = module.firehose_ingestion.bucket_name
 }
+
 ######################################################################################################################
 #                                     Amplify configuration                                                          #
 ######################################################################################################################
@@ -450,7 +349,6 @@ module "amplify_frontend" {
       target = "/index.html"
     }
   ]
-
 
   branch_environment_variables = {
     REACT_APP_API_URL               = module.ur3_api_gateway.api_url

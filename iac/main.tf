@@ -298,9 +298,9 @@ module "ur3_api_gateway" {
   project_name    = var.project_name
 
   lambda_execution_role_arn = aws_iam_role.lambda_execution_role.arn
-  
+
   # Visszatéve a hivatkozás, nehogy a belső változókon elhasaljon a Terraform!
-  s3_bucket_name            = module.s3_robot_data.bucket_name
+  s3_bucket_name = module.s3_robot_data.bucket_name
 
   command_queue_url       = module.cloud_to_device_queue.queue_url
   telemetry_table_name    = module.dynamodb_storage.dynamodb_table_name

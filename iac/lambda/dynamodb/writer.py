@@ -18,7 +18,7 @@ def apply_correction(joint_positions):
         return joint_positions
 
     corrected_positions = [
-        float(joint_positions[0]),                      
+        float(joint_positions[0]*-1),                      
         float(joint_positions[1]) + (math.pi/2),      
         float(joint_positions[2]),                      
         float(joint_positions[3]) + (math.pi/2),                   

@@ -45,7 +45,7 @@ def apply_correction(joint_positions):
 
     # A JSX-ben lévő logika átültetve Pythonba
     corrected_positions = [
-        joint_positions[0],                      # Joint 0: Váll forgatás (pan)
+        joint_positions[0]*-1,                      # Joint 0: Váll forgatás (pan)
         joint_positions[1]+(math.pi/2),      # Joint 1: Váll emelés (lift)
         joint_positions[2],                      # Joint 2: Könyök
         joint_positions[3] +(math.pi/2),                   # Joint 3: Csukló 1

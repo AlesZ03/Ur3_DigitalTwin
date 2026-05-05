@@ -14,8 +14,8 @@ from rtde_control import RTDEControlInterface as RTDEControl
 from rtde_receive import RTDEReceiveInterface as RTDEReceive
 
 # --- Konfiguráció ---
-#ROBOT_IP = "192.168.98.6"  
-ROBOT_IP = "172.17.0.2" 
+ROBOT_IP = "192.168.98.6"  
+#ROBOT_IP = "172.17.0.2" 
 AWS_REGION = 'eu-central-1'
 
 LOG_QUEUE_URL = 'https://sqs.eu-central-1.amazonaws.com/359289023072/Ur3_DigitalTwin-device-to-cloud'     

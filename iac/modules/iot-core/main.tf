@@ -171,7 +171,7 @@ resource "aws_iot_topic_rule" "forward_to_lambda" {
   name        = "${replace(var.project_name, "-", "_")}_forward_shadow_to_lambda"
   description = "Triggers a Lambda function on every accepted shadow update."
   enabled     = true
-  sql         = "SELECT state.reported.joint_positions AS joint_positions, state.reported.timestamp AS timestamp FROM '$aws/things/${aws_iot_thing.ur3_robot.name}/shadow/update/accepted'"
+  sql         = "SELECT * FROM '$aws/things/${aws_iot_thing.ur3_robot.name}/shadow/update/accepted'"
   sql_version = "2016-03-23"
 
   lambda {

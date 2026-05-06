@@ -14,8 +14,8 @@ from rtde_control import RTDEControlInterface as RTDEControl
 from rtde_receive import RTDEReceiveInterface as RTDEReceive
 
 # --- Konfiguráció ---
-#ROBOT_IP = "192.168.98.6"  
-ROBOT_IP = "172.17.0.2" 
+ROBOT_IP = "192.168.98.6"  
+#ROBOT_IP = "172.17.0.2" 
 AWS_REGION = 'eu-central-1'
 
 LOG_QUEUE_URL = 'https://sqs.eu-central-1.amazonaws.com/359289023072/Ur3_DigitalTwin-device-to-cloud'     
@@ -248,6 +248,11 @@ def main():
         
         while not stop_event.is_set():
             try:
+                if not rtde_r.isConnected():
+                    logging.warning("Adatfogadó kapcsolat megszakadt. Próbálkozás a helyreállítással...")
+                    rtde_r.reconnect()
+                    time.sleep(1)
+                    continue
                 command_data = command_queue.get(timeout=1)
                 command = command_data.get('command', command_data)
                 
@@ -257,35 +262,33 @@ def main():
 
                 action = command['action']
                 if action == 'move':
-                    speed = command.get('speed', 0.25)
+                    speed = command.get('speed', 1)
                     acceleration = command.get('acceleration', 0.5)
+
+                    # ---> ÚJ ELLENŐRZŐ BLOKK KÖZVETLENÜL A MOZGÁS ELŐTT <---
+                    # Ellenőrizzük, hogy a kézi leállítás miatt leállt-e a script
+                    if not rtde_c.isProgramRunning():
+                        logging.warning("Az RTDE script nem fut a roboton! Újrafeltöltés és indítás...")
+                        rtde_c.reuploadScript()
+                        time.sleep(0.5) # Hagyunk egy kis időt, hogy a roboton elinduljon a program
+                    # ---------------------------------------------------------
 
                     if 'pose' in command:
                         target = command['pose']
-                        if isinstance(target, list) and len(target) == 6:
-                            logging.info(f"Lineáris mozgás (moveL) indítása: {target}")
-                            rtde_c.moveL(target, speed, acceleration)
-                            logging.info("Lineáris mozgás (moveL) befejezve.")
-                        else:
-                            logging.warning(f"Érvénytelen 'moveL' parancs: a 'pose' rossz formátumú. Kapott: {target}")
+                        logging.info(f"Lineáris mozgás (moveL) indítása: {target}")
+                        rtde_c.moveL(target, speed, acceleration)
+                        logging.info("Lineáris mozgás (moveL) befejezve.")
+                        
                     elif 'joints' in command:
                         target = command['joints']
-                        if isinstance(target, list) and len(target) == 6:
-                            joint_speed = command.get('speed', 1.05)
-                            joint_acceleration = command.get('acceleration', 1.4)
-                            logging.info(f"Csukló menti mozgás (moveJ) indítása: {target}")
-                            rtde_c.moveJ(target, joint_speed, joint_acceleration)
-                            logging.info("Csukló menti mozgás (moveJ) befejezve.")
-                        else:
-                            logging.warning(f"Érvénytelen 'moveJ' parancs: a 'joints' rossz formátumú. Kapott: {target}")
-                    else:
-                        logging.warning("Érvénytelen 'move' parancs: hiányzik a 'pose' vagy 'joints' kulcs.")
-                
+                        logging.info(f"Csukló menti mozgás (moveJ) indítása: {target}")
+                        rtde_c.moveJ(target, speed, acceleration)
+                        logging.info("Csukló menti mozgás (moveJ) befejezve.")
                 elif action == 'stop':
-                    logging.warning("Vészleállítás (stop) parancs fogadva! Mozgás lassítása...")
-                    rtde_c.stopL(1.0) 
-                    logging.info("Robot mozgása leállítva.")
-                
+                                    logging.warning("Vészleállítás (stop) parancs fogadva! Mozgás lassítása...")
+                                    rtde_c.stopL(1.0) 
+                                    logging.info("Robot mozgása leállítva.")
+                                
                 else:
                     logging.warning(f"Ismeretlen 'action' érték: {action}")
 

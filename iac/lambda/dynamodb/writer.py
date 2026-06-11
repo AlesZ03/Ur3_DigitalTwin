@@ -2,7 +2,7 @@ import boto3
 import base64
 import json
 import os
-import math  # <-- Ezt hozzáadtuk a Pi számolásához
+import math  
 from decimal import Decimal
 
 # Csatlakozás a DynamoDB-hez
@@ -30,7 +30,7 @@ def apply_correction(joint_positions):
 def handler(event, context):
     output_records = []
 
-    # A DynamoDB batch_writer-t használjuk a hatékony, csoportos íráshoz 
+   
     with table.batch_writer() as batch:
         for record in event['records']:
             try:

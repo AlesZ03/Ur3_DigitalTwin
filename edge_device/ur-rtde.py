@@ -18,7 +18,7 @@ from rtde_receive import RTDEReceiveInterface as RTDEReceive
 ROBOT_IP = "172.17.0.2" 
 AWS_REGION = 'eu-central-1'
 
-LOG_QUEUE_URL = 'https://sqs.eu-central-1.amazonaws.com/359289023072/Ur3_DigitalTwin-device-to-cloud'     
+    
 
 # AWS IoT Core (Paho MQTT)
 AWS_IOT_ENDPOINT = "a13j85r7ze62nv-ats.iot.eu-central-1.amazonaws.com" 

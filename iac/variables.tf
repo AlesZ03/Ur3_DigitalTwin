@@ -19,7 +19,7 @@ variable "project_name" {
 variable "alert_email" {
   description = "Email cím riasztásokhoz (opcionális)"
   type        = string
-  default     = "balazsvajk2003@gmail.com"
+  default    = ""
 }
 
 # --- S3 Archiválási változók ---
